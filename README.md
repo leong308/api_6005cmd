@@ -1,16 +1,36 @@
-# api_6005cmd
+# Smart Travel Planner (Flutter + Express)
 
-A new Flutter project.
+This workspace contains:
 
-## Getting Started
+- Flutter web UI (`lib/`)
+- Express.js backend (`backend/`)
 
-This project is a starting point for a Flutter application.
+## Run Flutter UI
 
-A few resources to get you started if this is your first Flutter project:
+```bash
+flutter pub get
+flutter run -d chrome
+```
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## Run Express Backend
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```bash
+cd backend
+npm install
+npm run dev
+```
+
+Backend base URL: `http://localhost:3000/api`
+
+## API Contracts
+
+Contracts used by Flutter are in:
+
+- `lib/core/api/api_config.dart`
+- `lib/core/api/api_contract.dart`
+
+You can override API URLs at build/run time:
+
+```bash
+flutter run -d chrome --dart-define=SELF_API_BASE_URL=http://localhost:3000/api --dart-define=EXTERNAL_PROXY_BASE_URL=http://localhost:3000/api/external
+```
