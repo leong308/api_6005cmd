@@ -12,8 +12,10 @@ const {
   getTripSummary,
 } = require("../data/store");
 const { HttpError, assertRequiredFields } = require("../lib/http");
+const countryService = require("../services/countryService");
 
 const tripRouter = express.Router();
+
 
 tripRouter.get("/", (req, res) => {
   const trips = listTrips();
@@ -81,30 +83,23 @@ tripRouter.get("/:id/recommendations", (req, res) => {
   });
 });
 
-tripRouter.get("/:id/country-info", (req, res) => {
-  const trip = getTripById(req.params.id);
-  if (!trip) {
-    throw new HttpError(404, "Trip not found.");
+tripRouter.get("/:id/country-info", async (req, res, next) => {
+  try {
+    const trip = getTripById(req.params.id);
+    if (!trip) {
+      throw new HttpError(404, "Trip not found.");
+    }
+
+    const countryData = await countryService.fetchCountryData(trip.destinationCountry);
+
+    return res.json({
+      success: true,
+      tripId: req.params.id,
+      data: countryData,
+    });
+  } catch (error) {
+    return next(error);
   }
-
-  res.json({
-    success: true,
-    tripId: req.params.id,
-    data: getTripCountryInfo(req.params.id),
-  });
-});
-
-tripRouter.get("/:id/summary", (req, res) => {
-  const summary = getTripSummary(req.params.id);
-  if (!summary) {
-    throw new HttpError(404, "Trip not found.");
-  }
-
-  res.json({
-    success: true,
-    tripId: req.params.id,
-    data: summary,
-  });
 });
 
 tripRouter.get("/:id", (req, res) => {

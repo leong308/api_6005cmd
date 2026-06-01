@@ -336,9 +336,15 @@ class _TripDetailsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Trip Details',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 20),
+          Row(
+            children: [
+              const Icon(Icons.flight_takeoff_rounded, color: AppPalette.coral, size: 22),
+              const SizedBox(width: 8),
+              Text(
+                'Trip Details',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 20),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
           Wrap(
@@ -446,7 +452,13 @@ class _WeatherView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Weather', style: Theme.of(context).textTheme.titleMedium),
+        Row(
+          children: [
+            const Icon(Icons.wb_twilight_rounded, color: AppPalette.blue, size: 20),
+            const SizedBox(width: 8),
+            Text('Weather', style: Theme.of(context).textTheme.titleMedium),
+          ],
+        ),
         const SizedBox(height: 10),
         _item('Temperature', '${weather.temperature}°C'),
         _item('Condition', weather.condition),
@@ -467,7 +479,13 @@ class _PlaceView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Google Places Nearby', style: Theme.of(context).textTheme.titleMedium),
+        Row(
+          children: [
+            const Icon(Icons.place_rounded, color: AppPalette.mint, size: 20),
+            const SizedBox(width: 8),
+            Text('Google Places Nearby', style: Theme.of(context).textTheme.titleMedium),
+          ],
+        ),
         const SizedBox(height: 10),
         for (final place in places)
           Padding(
@@ -492,9 +510,15 @@ class _RecommendationView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Foursquare Recommendations',
-          style: Theme.of(context).textTheme.titleMedium,
+        Row(
+          children: [
+            const Icon(Icons.recommend_rounded, color: AppPalette.coral, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              'Foursquare Recommendations',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ],
         ),
         const SizedBox(height: 10),
         for (final rec in recommendations)
@@ -517,17 +541,51 @@ class _CountryView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasFlagUrl = info.flag.startsWith('http');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Country Information', style: Theme.of(context).textTheme.titleMedium),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.public_rounded, color: AppPalette.ink, size: 20),
+                const SizedBox(width: 8),
+                Text('Country Information', style: Theme.of(context).textTheme.titleMedium),
+              ],
+            ),
+            if (hasFlagUrl)
+              Container(
+                decoration: BoxDecoration(
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: Image.network(
+                    info.flag,
+                    height: 24,
+                    width: 36,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.flag),
+                  ),
+                ),
+              ),
+          ],
+        ),
         const SizedBox(height: 10),
         _item('Country', info.country),
         _item('Capital', info.capital),
         _item('Currency', info.currency),
         _item('Language', info.languages.join(', ')),
         _item('Region', info.region),
-        _item('Flag', info.flag),
+        if (!hasFlagUrl) _item('Flag', info.flag),
       ],
     );
   }

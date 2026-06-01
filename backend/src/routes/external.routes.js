@@ -1,5 +1,6 @@
 const express = require("express");
 const { HttpError } = require("../lib/http");
+const countryService = require("../services/countryService");
 
 const externalRouter = express.Router();
 
@@ -79,23 +80,24 @@ externalRouter.get("/recommendations", (req, res) => {
   });
 });
 
-externalRouter.get("/country-info", (req, res) => {
-  const country = String(req.query.country ?? "").trim();
-  if (!country) {
-    throw new HttpError(400, "Query param country is required.");
-  }
+externalRouter.get("/country-info", async (req, res, next) => {
+  try {
+    const country = String(req.query.country ?? "").trim();
+    if (!country) {
+      throw new HttpError(400, "Query param country is required.");
+    }
 
-  res.json({
-    success: true,
-    provider: "mock-rest-countries-proxy",
-    data: {
-      country,
-      capital: "Not configured",
-      currency: "Not configured",
-      languages: [],
-      region: "Not configured",
-    },
-  });
+    const countryData = await countryService.fetchCountryData(country);
+
+    return res.json({
+      success: true,
+      provider: "rest-countries",
+      data: countryData,
+    });
+  } catch (error) {
+    return next(error);
+  }
 });
 
 module.exports = { externalRouter };
+

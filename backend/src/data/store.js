@@ -193,12 +193,15 @@ const seedSummaryByTrip = {
   },
 };
 
+const bcrypt = require("bcryptjs");
+
 const seedUsers = [
   {
     id: "user_001",
     name: "Demo User",
     email: "demo@travel.local",
-    password: "demo1234",
+    // Hash the seed password so bcrypt.compare() works during login
+    password: bcrypt.hashSync("demo1234", 10),
   },
 ];
 

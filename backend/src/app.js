@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const { env } = require("./config/env");
 const { apiRouter } = require("./routes");
-const { notFoundHandler, errorHandler } = require("./middleware/error-handler");
+
 
 function createApp() {
   const app = express();
@@ -26,10 +26,8 @@ function createApp() {
 
   app.use("/api", apiRouter);
 
-  app.use(notFoundHandler);
-  app.use(errorHandler);
-
   return app;
 }
 
 module.exports = { createApp };
+
