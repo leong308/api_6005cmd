@@ -1,4 +1,4 @@
-const seedTrips = [
+const legacySeedTrips = [
   {
     id: "trip_001",
     destinationName: "Tokyo",
@@ -34,183 +34,64 @@ const seedTrips = [
   },
 ];
 
-const seedSummaryByTrip = {
-  trip_001: {
-    weather: {
-      temperature: 27,
-      condition: "Cloudy",
-      humidity: 70,
-      windSpeed: 3.2,
-    },
-    googlePlaces: [
-      {
-        name: "Tokyo Tower",
-        address: "Tokyo, Japan",
-        rating: 4.5,
-        type: "tourist_attraction",
-      },
-      {
-        name: "Shibuya Crossing",
-        address: "Shibuya, Tokyo",
-        rating: 4.7,
-        type: "landmark",
-      },
-      {
-        name: "Ueno Park",
-        address: "Taito, Tokyo",
-        rating: 4.6,
-        type: "park",
-      },
-    ],
-    recommendations: [
-      {
-        name: "Senso-ji Temple",
-        category: "Temple",
-        distanceMeters: 3500,
-        address: "Asakusa, Tokyo",
-      },
-      {
-        name: "Tsukiji Market",
-        category: "Market",
-        distanceMeters: 4700,
-        address: "Chuo, Tokyo",
-      },
-      {
-        name: "Local Ramen Spot",
-        category: "Restaurant",
-        distanceMeters: 1200,
-        address: "Shinjuku, Tokyo",
-      },
-    ],
-    countryInfo: {
-      country: "Japan",
-      capital: "Tokyo",
-      currency: "Japanese Yen",
-      languages: ["Japanese"],
-      region: "Asia",
-      flag: "Japan",
-    },
-  },
-  trip_002: {
-    weather: {
-      temperature: 31,
-      condition: "Light Rain",
-      humidity: 78,
-      windSpeed: 2.8,
-    },
-    googlePlaces: [
-      {
-        name: "Wat Arun",
-        address: "Bangkok, Thailand",
-        rating: 4.6,
-        type: "temple",
-      },
-      {
-        name: "Chatuchak Market",
-        address: "Bangkok, Thailand",
-        rating: 4.4,
-        type: "market",
-      },
-      {
-        name: "ICONSIAM",
-        address: "Bangkok, Thailand",
-        rating: 4.5,
-        type: "shopping_mall",
-      },
-    ],
-    recommendations: [
-      {
-        name: "Yaowarat Street Food",
-        category: "Food",
-        distanceMeters: 1900,
-        address: "Chinatown, Bangkok",
-      },
-      {
-        name: "Siam Night Market",
-        category: "Shopping",
-        distanceMeters: 2300,
-        address: "Pathum Wan, Bangkok",
-      },
-    ],
-    countryInfo: {
-      country: "Thailand",
-      capital: "Bangkok",
-      currency: "Thai Baht",
-      languages: ["Thai"],
-      region: "Asia",
-      flag: "Thailand",
-    },
-  },
-  trip_003: {
-    weather: {
-      temperature: 24,
-      condition: "Clear",
-      humidity: 60,
-      windSpeed: 2.1,
-    },
-    googlePlaces: [
-      {
-        name: "Gyeongbokgung Palace",
-        address: "Seoul, South Korea",
-        rating: 4.7,
-        type: "palace",
-      },
-      {
-        name: "N Seoul Tower",
-        address: "Seoul, South Korea",
-        rating: 4.6,
-        type: "landmark",
-      },
-      {
-        name: "Lotte World",
-        address: "Seoul, South Korea",
-        rating: 4.5,
-        type: "family_attraction",
-      },
-    ],
-    recommendations: [
-      {
-        name: "Bukchon Hanok Village",
-        category: "Culture",
-        distanceMeters: 2100,
-        address: "Jongno, Seoul",
-      },
-      {
-        name: "COEX Aquarium",
-        category: "Family",
-        distanceMeters: 5400,
-        address: "Gangnam, Seoul",
-      },
-    ],
-    countryInfo: {
-      country: "South Korea",
-      capital: "Seoul",
-      currency: "South Korean Won",
-      languages: ["Korean"],
-      region: "Asia",
-      flag: "South Korea",
-    },
-  },
-};
+const seedTrips = [];
+const seedSummaryByTrip = {};
 
-const bcrypt = require("bcryptjs");
+const fs = require("fs");
+const path = require("path");
 
-const seedUsers = [
-  {
-    id: "user_001",
-    name: "Demo User",
-    email: "demo@travel.local",
-    // Hash the seed password so bcrypt.compare() works during login
-    password: bcrypt.hashSync("demo1234", 10),
-  },
-];
+const runtimeDataDir = path.join(__dirname, "..", "..", ".data");
+const tripsFile = path.join(runtimeDataDir, "trips.json");
 
-let trips = deepClone(seedTrips);
+const seedUsers = [];
+
+let trips = loadTrips();
 let summaryByTrip = deepClone(seedSummaryByTrip);
 let users = deepClone(seedUsers);
 
 function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function loadTrips() {
+  try {
+    if (!fs.existsSync(tripsFile)) {
+      return deepClone(seedTrips);
+    }
+
+    const parsed = JSON.parse(fs.readFileSync(tripsFile, "utf8"));
+    if (Array.isArray(parsed)) {
+      const tripsWithoutLegacySeeds = parsed.filter((trip) => !isLegacySeedTrip(trip));
+      if (tripsWithoutLegacySeeds.length !== parsed.length) {
+        writeTrips(tripsWithoutLegacySeeds);
+      }
+      return tripsWithoutLegacySeeds;
+    }
+  } catch (error) {
+    console.warn(`Could not load persisted trips. Using seed data. ${error.message}`);
+  }
+
+  return deepClone(seedTrips);
+}
+
+function isLegacySeedTrip(trip) {
+  return legacySeedTrips.some(
+    (seed) =>
+      trip?.id === seed.id &&
+      trip?.destinationName === seed.destinationName &&
+      trip?.destinationCountry === seed.destinationCountry &&
+      trip?.startDate === seed.startDate &&
+      trip?.endDate === seed.endDate,
+  );
+}
+
+function persistTrips() {
+  writeTrips(trips);
+}
+
+function writeTrips(nextTrips) {
+  fs.mkdirSync(runtimeDataDir, { recursive: true });
+  fs.writeFileSync(tripsFile, JSON.stringify(nextTrips, null, 2));
 }
 
 function generateTripId() {
@@ -250,6 +131,7 @@ function createTrip(payload) {
 
   trips.push(created);
   summaryByTrip[created.id] = buildFallbackSummary(created);
+  persistTrips();
   return deepClone(created);
 }
 
@@ -288,6 +170,7 @@ function updateTrip(id, payload) {
 
   trips[index] = updated;
   summaryByTrip[id] = buildFallbackSummary(updated);
+  persistTrips();
   return deepClone(updated);
 }
 
@@ -295,7 +178,11 @@ function deleteTrip(id) {
   const before = trips.length;
   trips = trips.filter((item) => item.id !== id);
   delete summaryByTrip[id];
-  return trips.length < before;
+  const deleted = trips.length < before;
+  if (deleted) {
+    persistTrips();
+  }
+  return deleted;
 }
 
 function getTripWeather(id) {
@@ -346,10 +233,10 @@ function buildFallbackSummary(trip) {
   if (!trip) {
     return {
       weather: {
-        temperature: 25,
-        condition: "Partly Cloudy",
-        humidity: 65,
-        windSpeed: 2.5,
+        temperature: null,
+        condition: "Unavailable",
+        humidity: null,
+        windSpeed: null,
       },
       googlePlaces: [],
       recommendations: [],
@@ -364,51 +251,22 @@ function buildFallbackSummary(trip) {
     };
   }
 
-  const roundedLat = Number(trip.latitude.toFixed(4));
-  const roundedLng = Number(trip.longitude.toFixed(4));
-
   return {
     weather: {
-      temperature: 26,
-      condition: "Partly Cloudy",
-      humidity: 68,
-      windSpeed: 2.7,
+      temperature: null,
+      condition: "Unavailable",
+      humidity: null,
+      windSpeed: null,
     },
-    googlePlaces: [
-      {
-        name: `${trip.destinationName} Central Spot`,
-        address: `${trip.destinationName}, ${trip.destinationCountry}`,
-        rating: 4.4,
-        type: "landmark",
-      },
-      {
-        name: `${trip.destinationName} Food Area`,
-        address: `${trip.destinationName}, ${trip.destinationCountry}`,
-        rating: 4.3,
-        type: "food",
-      },
-    ],
-    recommendations: [
-      {
-        name: `${trip.destinationName} Local Walk`,
-        category: "Culture",
-        distanceMeters: 1800,
-        address: `${trip.destinationName}, ${trip.destinationCountry}`,
-      },
-      {
-        name: `${trip.destinationName} Family Area`,
-        category: "Family",
-        distanceMeters: 3200,
-        address: `${trip.destinationName}, ${trip.destinationCountry}`,
-      },
-    ],
+    googlePlaces: [],
+    recommendations: [],
     countryInfo: {
       country: trip.destinationCountry,
-      capital: "Not configured",
-      currency: "Not configured",
+      capital: "Unavailable",
+      currency: "Unavailable",
       languages: [],
-      region: "Not configured",
-      flag: `${trip.destinationCountry} (${roundedLat}, ${roundedLng})`,
+      region: "Unavailable",
+      flag: "",
     },
   };
 }

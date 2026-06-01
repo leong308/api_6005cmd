@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:api_6005cmd/app/theme/app_palette.dart';
 import 'package:api_6005cmd/features/add_trip/data/add_trip_form_data.dart';
 import 'package:api_6005cmd/features/add_trip/model/add_trip_draft_model.dart';
+import 'package:api_6005cmd/features/trip_list/data/trip_list_data_source.dart';
 import 'package:api_6005cmd/shared/view/layer_badges.dart';
 import 'package:api_6005cmd/shared/view/mac_panel.dart';
 import 'package:api_6005cmd/shared/view/osm_coordinate_picker.dart';
@@ -10,7 +11,14 @@ import 'package:api_6005cmd/shared/view/section_header.dart';
 import 'package:flutter/material.dart';
 
 class AddTripPage extends StatefulWidget {
-  const AddTripPage({super.key});
+  const AddTripPage({
+    super.key,
+    required this.dataSource,
+    required this.onTripCreated,
+  });
+
+  final TripListDataSource dataSource;
+  final ValueChanged<String> onTripCreated;
 
   @override
   State<AddTripPage> createState() => _AddTripPageState();
@@ -25,23 +33,19 @@ class _AddTripPageState extends State<AddTripPage> {
   late final Set<String> _selectedPreferences;
   late double _latitude;
   late double _longitude;
+  bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
-    final seed = AddTripFormData.seedDraft();
-    _destinationController = TextEditingController(text: seed.destinationName);
-    _countryController = TextEditingController(text: seed.destinationCountry);
-    _latitude = seed.latitude;
-    _longitude = seed.longitude;
-    _startDateController = TextEditingController(
-      text: seed.startDate.toIso8601String().split('T').first,
-    );
-    _endDateController = TextEditingController(
-      text: seed.endDate.toIso8601String().split('T').first,
-    );
-    _notesController = TextEditingController(text: seed.travelNotes);
-    _selectedPreferences = seed.preferences.toSet();
+    _destinationController = TextEditingController();
+    _countryController = TextEditingController();
+    _latitude = 0;
+    _longitude = 0;
+    _startDateController = TextEditingController();
+    _endDateController = TextEditingController();
+    _notesController = TextEditingController();
+    _selectedPreferences = <String>{};
   }
 
   @override
@@ -55,17 +59,15 @@ class _AddTripPageState extends State<AddTripPage> {
   }
 
   AddTripDraftModel get _draft {
-    final start =
-        DateTime.tryParse(_startDateController.text) ?? DateTime(2026, 7, 12);
-    final end =
-        DateTime.tryParse(_endDateController.text) ?? DateTime(2026, 7, 18);
+    final start = DateTime.tryParse(_startDateController.text);
+    final end = DateTime.tryParse(_endDateController.text);
     return AddTripDraftModel(
       destinationName: _destinationController.text.trim(),
       destinationCountry: _countryController.text.trim(),
       latitude: _latitude,
       longitude: _longitude,
-      startDate: start,
-      endDate: end,
+      startDate: start ?? DateTime.now(),
+      endDate: end ?? start ?? DateTime.now(),
       preferences: _selectedPreferences.toList(),
       travelNotes: _notesController.text.trim(),
     );
@@ -94,11 +96,11 @@ class _AddTripPageState extends State<AddTripPage> {
         const SectionHeader(
           title: 'Add Trip',
           subtitle:
-              'Pure UI form for POST /api/trips. Inputs are local-only and API-binding ready.',
+              'Create a trip through POST /api/trips and open its live summary response.',
         ),
         const SizedBox(height: 12),
         const LayerBadges(
-          dataLayer: 'AddTripFormData',
+          dataLayer: 'TripListDataSource',
           modelLayer: 'AddTripDraftModel',
           viewLayer: 'AddTripPage',
         ),
@@ -135,40 +137,6 @@ class _AddTripPageState extends State<AddTripPage> {
 
   Widget _buildForm({required bool scrollable}) {
     final children = <Widget>[
-      Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          _quickFillButton(
-            label: 'Tokyo',
-            onTap: () => _applyQuickFill(
-              destination: 'Tokyo',
-              country: 'Japan',
-              lat: '35.6762',
-              lng: '139.6503',
-            ),
-          ),
-          _quickFillButton(
-            label: 'Bangkok',
-            onTap: () => _applyQuickFill(
-              destination: 'Bangkok',
-              country: 'Thailand',
-              lat: '13.7563',
-              lng: '100.5018',
-            ),
-          ),
-          _quickFillButton(
-            label: 'Seoul',
-            onTap: () => _applyQuickFill(
-              destination: 'Seoul',
-              country: 'South Korea',
-              lat: '37.5665',
-              lng: '126.9780',
-            ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 12),
       _field('Destination Name', _destinationController),
       const SizedBox(height: 10),
       _field('Destination Country', _countryController),
@@ -186,16 +154,15 @@ class _AddTripPageState extends State<AddTripPage> {
       const SizedBox(height: 10),
       Row(
         children: [
-          Expanded(child: _field('Start Date (YYYY-MM-DD)', _startDateController)),
+          Expanded(
+            child: _field('Start Date (YYYY-MM-DD)', _startDateController),
+          ),
           const SizedBox(width: 10),
           Expanded(child: _field('End Date (YYYY-MM-DD)', _endDateController)),
         ],
       ),
       const SizedBox(height: 12),
-      const Text(
-        'Preferences',
-        style: TextStyle(fontWeight: FontWeight.w600),
-      ),
+      const Text('Preferences', style: TextStyle(fontWeight: FontWeight.w600)),
       const SizedBox(height: 8),
       Wrap(
         spacing: 8,
@@ -223,9 +190,14 @@ class _AddTripPageState extends State<AddTripPage> {
       Row(
         children: [
           FilledButton.icon(
-            onPressed: null,
-            icon: const Icon(Icons.cloud_upload_rounded),
-            label: const Text('Create Trip (API Pending)'),
+            onPressed: _isSaving ? null : _createTrip,
+            icon: _isSaving
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.cloud_upload_rounded),
+            label: Text(_isSaving ? 'Creating...' : 'Create Trip'),
           ),
           const SizedBox(width: 8),
           TextButton(
@@ -239,10 +211,7 @@ class _AddTripPageState extends State<AddTripPage> {
     return MacPanel(
       color: AppPalette.mintA(0.06),
       child: scrollable
-          ? ListView(
-              padding: const EdgeInsets.only(top: 4),
-              children: children,
-            )
+          ? ListView(padding: const EdgeInsets.only(top: 4), children: children)
           : Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Column(
@@ -266,9 +235,9 @@ class _AddTripPageState extends State<AddTripPage> {
           const SizedBox(height: 6),
           Text(
             'This payload shape matches the assignment trip model for POST /api/trips.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppPalette.inkA(0.64),
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AppPalette.inkA(0.64)),
           ),
           const SizedBox(height: 10),
           Expanded(
@@ -313,29 +282,36 @@ class _AddTripPageState extends State<AddTripPage> {
     );
   }
 
-  void _applyQuickFill({
-    required String destination,
-    required String country,
-    required String lat,
-    required String lng,
-  }) {
+  Future<void> _createTrip() async {
     setState(() {
-      _destinationController.text = destination;
-      _countryController.text = country;
-      _latitude = double.tryParse(lat) ?? _latitude;
-      _longitude = double.tryParse(lng) ?? _longitude;
+      _isSaving = true;
     });
-  }
 
-  Widget _quickFillButton({
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return ActionChip(
-      avatar: const Icon(Icons.auto_fix_high_rounded, size: 16),
-      label: Text('Quick Fill: $label'),
-      onPressed: onTap,
-    );
+    try {
+      final created = await widget.dataSource.createTrip(_draft);
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Created ${created.id}: ${created.destinationName}'),
+        ),
+      );
+      widget.onTripCreated(created.id);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not create trip: $error')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
   }
 }
 
@@ -362,7 +338,9 @@ class _FormReadiness extends StatelessWidget {
                   value: score,
                   strokeWidth: 6,
                   backgroundColor: AppPalette.inkA(0.12),
-                  valueColor: const AlwaysStoppedAnimation<Color>(AppPalette.blue),
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    AppPalette.blue,
+                  ),
                 ),
                 Text('$percent%'),
               ],
@@ -380,10 +358,9 @@ class _FormReadiness extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   'Input completion for POST /api/trips payload.',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyMedium
-                      ?.copyWith(color: AppPalette.inkA(0.64)),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppPalette.inkA(0.64),
+                  ),
                 ),
               ],
             ),

@@ -50,16 +50,20 @@ class _TripListPageState extends State<TripListPage> {
     return FutureBuilder<List<TripListItemModel>>(
       future: _tripFuture,
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
+        if (snapshot.hasError) {
+          return _TripLoadError(
+            message: snapshot.error.toString(),
+            onRetry: _refresh,
+          );
+        }
+
+        if (snapshot.connectionState != ConnectionState.done) {
           return const Center(child: CircularProgressIndicator());
         }
 
         final trips = snapshot.data!;
-        final allPreferences = trips
-            .expand((trip) => trip.preferences)
-            .toSet()
-            .toList()
-          ..sort();
+        final allPreferences =
+            trips.expand((trip) => trip.preferences).toSet().toList()..sort();
         final filteredTrips = _filteredTrips(trips);
 
         return Column(
@@ -112,10 +116,50 @@ class _TripListPageState extends State<TripListPage> {
           .contains(query);
       final notes = trip.travelNotes.toLowerCase().contains(query);
       final matchesQuery = query.isEmpty || destination || notes;
-      final matchesPreferences = _activePreferences.isEmpty ||
+      final matchesPreferences =
+          _activePreferences.isEmpty ||
           trip.preferences.any(_activePreferences.contains);
       return matchesQuery && matchesPreferences;
     }).toList();
+  }
+}
+
+class _TripLoadError extends StatelessWidget {
+  const _TripLoadError({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: MacPanel(
+        color: AppPalette.coralA(0.08),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_rounded, color: AppPalette.coral),
+            const SizedBox(height: 8),
+            Text(
+              'Could not load trips from the API',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            FilledButton.tonalIcon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -135,27 +179,25 @@ class _TripListHeader extends StatelessWidget {
             children: [
               Text(
                 'Home / Trip List',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontSize: 24,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontSize: 24),
               ),
               const SizedBox(height: 2),
               Text(
                 'Trip is the parent record. Search and filter to inspect modules quickly.',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: AppPalette.inkA(0.62)),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: AppPalette.inkA(0.62)),
               ),
               const SizedBox(height: 4),
               Text(
                 'Data: TripListDataSource   •   Model: TripListItemModel   •   View: TripListPage',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: AppPalette.inkA(0.56)),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.56)),
               ),
             ],
           ),
@@ -243,18 +285,16 @@ class _FilterPanel extends StatelessWidget {
 }
 
 class _TripStats extends StatelessWidget {
-  const _TripStats({
-    required this.trips,
-    required this.totalTrips,
-  });
+  const _TripStats({required this.trips, required this.totalTrips});
 
   final List<TripListItemModel> trips;
   final int totalTrips;
 
   @override
   Widget build(BuildContext context) {
-    final totalDays =
-        trips.fold<int>(0, (sum, trip) => sum + trip.totalDays).toString();
+    final totalDays = trips
+        .fold<int>(0, (sum, trip) => sum + trip.totalDays)
+        .toString();
     final countries = trips.map((t) => t.destinationCountry).toSet().length;
 
     return MacPanel(
@@ -323,18 +363,17 @@ class _MetricItem extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: AppPalette.inkA(0.58)),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.58)),
               ),
               Text(
                 value,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontSize: 18,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontSize: 18),
               ),
             ],
           ),
@@ -413,16 +452,16 @@ class _TripCardState extends State<_TripCard> {
                     children: [
                       Text(
                         '${widget.trip.destinationName}, ${widget.trip.destinationCountry}',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontSize: 19,
-                            ),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.titleLarge?.copyWith(fontSize: 19),
                       ),
                       const SizedBox(height: 6),
                       Text(
                         widget.trip.dateRangeLabel,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: AppPalette.inkA(0.64),
-                            ),
+                          color: AppPalette.inkA(0.64),
+                        ),
                       ),
                       const SizedBox(height: 10),
                       ClipRRect(
@@ -517,19 +556,22 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.search_off_rounded, size: 42, color: AppPalette.inkA(0.6)),
+            Icon(
+              Icons.search_off_rounded,
+              size: 42,
+              color: AppPalette.inkA(0.6),
+            ),
             const SizedBox(height: 10),
             Text(
-              'No trips match your filters',
+              'No trips yet',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 4),
             Text(
-              'Adjust search text or preference chips.',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(color: AppPalette.inkA(0.64)),
+              'Create your first trip from Add Trip.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppPalette.inkA(0.64)),
             ),
           ],
         ),

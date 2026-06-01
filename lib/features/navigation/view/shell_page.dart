@@ -22,12 +22,13 @@ class _ShellPageState extends State<ShellPage> {
   final TripListDataSource _tripListDataSource = TripListDataSource();
   late final TripSummaryDataSource _tripSummaryDataSource =
       TripSummaryDataSource(_tripListDataSource);
-  late final EditTripDataSource _editTripDataSource =
-      EditTripDataSource(_tripListDataSource);
+  late final EditTripDataSource _editTripDataSource = EditTripDataSource(
+    _tripListDataSource,
+  );
   final ApiDemoDataSource _apiDemoDataSource = const ApiDemoDataSource();
 
   AppSection _section = AppSection.tripList;
-  String _selectedTripId = 'trip_001';
+  String _selectedTripId = '';
 
   @override
   Widget build(BuildContext context) {
@@ -62,9 +63,7 @@ class _ShellPageState extends State<ShellPage> {
         }
 
         return Scaffold(
-          appBar: AppBar(
-            title: const Text('Smart Travel Planner'),
-          ),
+          appBar: AppBar(title: const Text('Smart Travel Planner')),
           body: _ScaffoldBackdrop(
             section: _section,
             child: SafeArea(
@@ -116,11 +115,24 @@ class _ShellPageState extends State<ShellPage> {
           },
         );
       case AppSection.addTrip:
-        return const AddTripPage();
+        return AddTripPage(
+          dataSource: _tripListDataSource,
+          onTripCreated: (id) {
+            setState(() {
+              _selectedTripId = id;
+              _section = AppSection.tripSummary;
+            });
+          },
+        );
       case AppSection.tripSummary:
         return TripSummaryPage(
           dataSource: _tripSummaryDataSource,
           tripId: _selectedTripId,
+          onEditTrip: () {
+            setState(() {
+              _section = AppSection.editTrip;
+            });
+          },
         );
       case AppSection.editTrip:
         return EditTripPage(
@@ -154,9 +166,7 @@ class _DesktopSidebar extends StatelessWidget {
       width: 260,
       padding: const EdgeInsets.fromLTRB(14, 18, 14, 18),
       decoration: BoxDecoration(
-        border: Border(
-          right: BorderSide(color: AppPalette.inkA(0.15)),
-        ),
+        border: Border(right: BorderSide(color: AppPalette.inkA(0.15))),
       ),
       child: Column(
         children: [
@@ -190,10 +200,7 @@ class _DesktopSidebar extends StatelessWidget {
                 SizedBox(height: 4),
                 Text(
                   'Minimalist web UI (Flutter)',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: AppPalette.inkA(0.64),
-                  ),
+                  style: TextStyle(fontSize: 13, color: AppPalette.inkA(0.64)),
                 ),
               ],
             ),
@@ -216,11 +223,8 @@ class _DesktopSidebar extends StatelessWidget {
           Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              'Mock mode enabled',
-              style: TextStyle(
-                fontSize: 12,
-                color: AppPalette.inkA(0.64),
-              ),
+              'Live API mode',
+              style: TextStyle(fontSize: 12, color: AppPalette.inkA(0.64)),
             ),
           ),
         ],
@@ -230,10 +234,7 @@ class _DesktopSidebar extends StatelessWidget {
 }
 
 class _MainCanvas extends StatelessWidget {
-  const _MainCanvas({
-    required this.section,
-    required this.child,
-  });
+  const _MainCanvas({required this.section, required this.child});
 
   final AppSection section;
   final Widget child;
@@ -247,10 +248,7 @@ class _MainCanvas extends StatelessWidget {
         Expanded(
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 220),
-            child: KeyedSubtree(
-              key: ValueKey(section.name),
-              child: child,
-            ),
+            child: KeyedSubtree(key: ValueKey(section.name), child: child),
           ),
         ),
       ],
@@ -349,10 +347,7 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 170),
           curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 10,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             gradient: active
                 ? LinearGradient(
@@ -381,7 +376,9 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
                   widget.entry.title,
                   style: TextStyle(
                     fontSize: 14,
-                    fontWeight: widget.selected ? FontWeight.w600 : FontWeight.w500,
+                    fontWeight: widget.selected
+                        ? FontWeight.w600
+                        : FontWeight.w500,
                     color: active ? AppPalette.ink : AppPalette.inkA(0.84),
                   ),
                 ),
@@ -395,10 +392,7 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
 }
 
 class _ScaffoldBackdrop extends StatelessWidget {
-  const _ScaffoldBackdrop({
-    required this.section,
-    required this.child,
-  });
+  const _ScaffoldBackdrop({required this.section, required this.child});
 
   final AppSection section;
   final Widget child;
@@ -450,10 +444,7 @@ class _ScaffoldBackdrop extends StatelessWidget {
 }
 
 class _AuraBlob extends StatelessWidget {
-  const _AuraBlob({
-    required this.color,
-    required this.size,
-  });
+  const _AuraBlob({required this.color, required this.size});
 
   final Color color;
   final double size;
@@ -464,10 +455,7 @@ class _AuraBlob extends StatelessWidget {
       child: Container(
         width: size,
         height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: color,
-        ),
+        decoration: BoxDecoration(shape: BoxShape.circle, color: color),
       ),
     );
   }

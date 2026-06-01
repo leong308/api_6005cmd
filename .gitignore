@@ -47,3 +47,4 @@ app.*.map.json
 # Node/Express backend
 backend/node_modules/
 backend/.env
+backend/.data/

@@ -2,12 +2,8 @@ const { createApp } = require("./app");
 const { env } = require("./config/env");
 const { globalErrorHandler } = require("./middleware/errorHandler");
 const { notFoundHandler } = require("./middleware/error-handler");
-const { summaryRouter } = require("./routes/summaryRoutes");
 
 const app = createApp();
-
-// Standalone summary routes
-app.use("/api/trips", summaryRouter);
 
 // Fallback for page/route not found
 app.use(notFoundHandler);

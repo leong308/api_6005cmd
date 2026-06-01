@@ -46,6 +46,6 @@ This matches `lib/core/api/api_config.dart`.
 
 ## Notes
 
-- Data is currently in-memory for development.
-- Auth is mock-only for UI integration.
+- Trip data is persisted locally in `backend/.data/trips.json` for development.
+- Auth uses bcrypt password hashes and JWT bearer tokens.
 - External endpoints are provider-ready stubs returning deterministic payloads.

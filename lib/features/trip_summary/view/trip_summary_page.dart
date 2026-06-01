@@ -23,10 +23,12 @@ class TripSummaryPage extends StatefulWidget {
     super.key,
     required this.dataSource,
     required this.tripId,
+    required this.onEditTrip,
   });
 
   final TripSummaryDataSource dataSource;
   final String tripId;
+  final VoidCallback onEditTrip;
 
   @override
   State<TripSummaryPage> createState() => _TripSummaryPageState();
@@ -61,7 +63,14 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
     return FutureBuilder<TripSummaryModel?>(
       future: _summaryFuture,
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
+        if (snapshot.hasError) {
+          return _SummaryError(
+            message: snapshot.error.toString(),
+            onRetry: _refreshMock,
+          );
+        }
+
+        if (snapshot.connectionState != ConnectionState.done) {
           return const Center(child: CircularProgressIndicator());
         }
 
@@ -72,7 +81,9 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
           );
         }
 
-        final json = const JsonEncoder.withIndent('  ').convert(summary.toJson());
+        final json = const JsonEncoder.withIndent(
+          '  ',
+        ).convert(summary.toJson());
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -104,7 +115,10 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
                 child: KeyedSubtree(
                   key: ValueKey(_tab),
                   child: switch (_tab) {
-                    _SummaryTab.overview => _OverviewTab(summary: summary),
+                    _SummaryTab.overview => _OverviewTab(
+                      summary: summary,
+                      onEditTrip: widget.onEditTrip,
+                    ),
                     _SummaryTab.modules => _ModulesTab(summary: summary),
                     _SummaryTab.json => _JsonTab(json: json),
                   },
@@ -118,11 +132,47 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
   }
 }
 
+class _SummaryError extends StatelessWidget {
+  const _SummaryError({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: MacPanel(
+        color: AppPalette.coralA(0.08),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_rounded, color: AppPalette.coral),
+            const SizedBox(height: 8),
+            Text(
+              'Could not load live trip summary',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            FilledButton.tonalIcon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _TabSwitcher extends StatelessWidget {
-  const _TabSwitcher({
-    required this.value,
-    required this.onChanged,
-  });
+  const _TabSwitcher({required this.value, required this.onChanged});
 
   final _SummaryTab value;
   final ValueChanged<_SummaryTab> onChanged;
@@ -150,9 +200,10 @@ class _TabSwitcher extends StatelessWidget {
 }
 
 class _OverviewTab extends StatelessWidget {
-  const _OverviewTab({required this.summary});
+  const _OverviewTab({required this.summary, required this.onEditTrip});
 
   final TripSummaryModel summary;
+  final VoidCallback onEditTrip;
 
   @override
   Widget build(BuildContext context) {
@@ -166,14 +217,7 @@ class _OverviewTab extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
-            FilledButton(
-              onPressed: null,
-              child: const Text('Edit Trip (PUT Pending)'),
-            ),
-            OutlinedButton(
-              onPressed: null,
-              child: const Text('Delete Trip (DELETE Pending)'),
-            ),
+            FilledButton(onPressed: onEditTrip, child: const Text('Edit Trip')),
           ],
         ),
       ],
@@ -257,21 +301,16 @@ class _MetricPanel extends StatelessWidget {
                 children: [
                   Text(
                     label,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: AppPalette.inkA(0.65)),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppPalette.inkA(0.65),
+                    ),
                   ),
-                  Text(
-                    value,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+                  Text(value, style: Theme.of(context).textTheme.titleMedium),
                   Text(
                     hint,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: AppPalette.inkA(0.65)),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppPalette.inkA(0.65),
+                    ),
                   ),
                 ],
               ),
@@ -296,10 +335,9 @@ class _ModulesTab extends StatelessWidget {
           color: AppPalette.whiteA(0.88),
           child: Text(
             'Flow: Trip Record → Weather / Nearby Places / Recommendations / Country Info',
-            style: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.copyWith(color: AppPalette.inkA(0.82)),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AppPalette.inkA(0.82)),
           ),
         ),
         const SizedBox(height: 12),
@@ -316,11 +354,7 @@ class _JsonTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      children: [
-        _SummaryJsonCard(json: json),
-      ],
-    );
+    return ListView(children: [_SummaryJsonCard(json: json)]);
   }
 }
 
@@ -338,11 +372,17 @@ class _TripDetailsCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.flight_takeoff_rounded, color: AppPalette.coral, size: 22),
+              const Icon(
+                Icons.flight_takeoff_rounded,
+                color: AppPalette.coral,
+                size: 22,
+              ),
               const SizedBox(width: 8),
               Text(
                 'Trip Details',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 20),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontSize: 20),
               ),
             ],
           ),
@@ -351,7 +391,10 @@ class _TripDetailsCard extends StatelessWidget {
             spacing: 16,
             runSpacing: 8,
             children: [
-              _detail('Destination', '${trip.destinationName}, ${trip.destinationCountry}'),
+              _detail(
+                'Destination',
+                '${trip.destinationName}, ${trip.destinationCountry}',
+              ),
               _detail('Date', trip.dateRangeLabel),
               _detail('Preferences', trip.preferences.join(', ')),
               _detail(
@@ -454,7 +497,11 @@ class _WeatherView extends StatelessWidget {
       children: [
         Row(
           children: [
-            const Icon(Icons.wb_twilight_rounded, color: AppPalette.blue, size: 20),
+            const Icon(
+              Icons.wb_twilight_rounded,
+              color: AppPalette.blue,
+              size: 20,
+            ),
             const SizedBox(width: 8),
             Text('Weather', style: Theme.of(context).textTheme.titleMedium),
           ],
@@ -483,7 +530,10 @@ class _PlaceView extends StatelessWidget {
           children: [
             const Icon(Icons.place_rounded, color: AppPalette.mint, size: 20),
             const SizedBox(width: 8),
-            Text('Google Places Nearby', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Google Places Nearby',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
           ],
         ),
         const SizedBox(height: 10),
@@ -512,7 +562,11 @@ class _RecommendationView extends StatelessWidget {
       children: [
         Row(
           children: [
-            const Icon(Icons.recommend_rounded, color: AppPalette.coral, size: 20),
+            const Icon(
+              Icons.recommend_rounded,
+              color: AppPalette.coral,
+              size: 20,
+            ),
             const SizedBox(width: 8),
             Text(
               'Foursquare Recommendations',
@@ -550,9 +604,16 @@ class _CountryView extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.public_rounded, color: AppPalette.ink, size: 20),
+                const Icon(
+                  Icons.public_rounded,
+                  color: AppPalette.ink,
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
-                Text('Country Information', style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  'Country Information',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
               ],
             ),
             if (hasFlagUrl)
@@ -560,7 +621,7 @@ class _CountryView extends StatelessWidget {
                 decoration: BoxDecoration(
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 4,
                       offset: const Offset(0, 2),
                     ),
@@ -573,7 +634,8 @@ class _CountryView extends StatelessWidget {
                     height: 24,
                     width: 36,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.flag),
+                    errorBuilder: (context, error, stackTrace) =>
+                        const Icon(Icons.flag),
                   ),
                 ),
               ),
@@ -635,11 +697,7 @@ class _SummaryJsonCard extends StatelessWidget {
 Widget _item(String label, String value) {
   return RichText(
     text: TextSpan(
-      style: const TextStyle(
-        color: AppPalette.ink,
-        fontSize: 14,
-        height: 1.4,
-      ),
+      style: const TextStyle(color: AppPalette.ink, fontSize: 14, height: 1.4),
       children: [
         TextSpan(
           text: '$label: ',

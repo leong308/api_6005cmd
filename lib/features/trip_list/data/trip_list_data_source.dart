@@ -1,54 +1,81 @@
+import 'package:api_6005cmd/core/api/api_client.dart';
+import 'package:api_6005cmd/features/add_trip/model/add_trip_draft_model.dart';
+import 'package:api_6005cmd/features/edit_trip/model/edit_trip_model.dart';
 import 'package:api_6005cmd/features/trip_list/model/trip_list_item_model.dart';
 
 class TripListDataSource {
+  TripListDataSource({ApiClient? apiClient})
+    : apiClient = apiClient ?? ApiClient();
+
+  final ApiClient apiClient;
+  final Map<String, TripListItemModel> _knownTrips = {};
+
   Future<List<TripListItemModel>> fetchTrips() async {
-    await Future<void>.delayed(const Duration(milliseconds: 140));
-    return _seedTrips;
+    final response = await apiClient.getJson('/trips');
+    final data = response['data'];
+    if (data is! List) {
+      throw const ApiException(500, 'Trips response did not include a list.');
+    }
+    final trips = data
+        .map((item) => TripListItemModel.fromJson(_asJsonObject(item)))
+        .toList();
+    for (final trip in trips) {
+      _knownTrips[trip.id] = trip;
+    }
+    return _mergeKnownTrips(trips);
   }
 
   Future<TripListItemModel?> fetchTripById(String id) async {
-    final trips = await fetchTrips();
-    for (final trip in trips) {
-      if (trip.id == id) {
-        return trip;
-      }
+    if (id.trim().isEmpty) {
+      return null;
     }
-    return null;
+
+    try {
+      final response = await apiClient.getJson('/trips/$id');
+      final trip = TripListItemModel.fromJson(_asJsonObject(response['data']));
+      _knownTrips[trip.id] = trip;
+      return trip;
+    } on ApiException catch (error) {
+      if (error.statusCode == 404) {
+        return _knownTrips[id];
+      }
+      rethrow;
+    }
+  }
+
+  Future<TripListItemModel> createTrip(AddTripDraftModel draft) async {
+    final response = await apiClient.postJson('/trips', draft.toJson());
+    final trip = TripListItemModel.fromJson(_asJsonObject(response['data']));
+    _knownTrips[trip.id] = trip;
+    return trip;
+  }
+
+  Future<TripListItemModel> updateTrip(EditTripModel trip) async {
+    final response = await apiClient.putJson(
+      '/trips/${trip.id}',
+      trip.toJson(),
+    );
+    final updated = TripListItemModel.fromJson(_asJsonObject(response['data']));
+    _knownTrips[updated.id] = updated;
+    return updated;
+  }
+
+  List<TripListItemModel> _mergeKnownTrips(List<TripListItemModel> apiTrips) {
+    final merged = <String, TripListItemModel>{
+      for (final trip in apiTrips) trip.id: trip,
+      ..._knownTrips,
+    };
+    final trips = merged.values.toList()..sort((a, b) => a.id.compareTo(b.id));
+    return trips;
   }
 }
 
-final List<TripListItemModel> _seedTrips = [
-  TripListItemModel(
-    id: 'trip_001',
-    destinationName: 'Tokyo',
-    destinationCountry: 'Japan',
-    latitude: 35.6762,
-    longitude: 139.6503,
-    startDate: DateTime(2026, 7, 12),
-    endDate: DateTime(2026, 7, 18),
-    preferences: ['culture', 'food'],
-    travelNotes: 'Visit cultural places and try local restaurants.',
-  ),
-  TripListItemModel(
-    id: 'trip_002',
-    destinationName: 'Bangkok',
-    destinationCountry: 'Thailand',
-    latitude: 13.7563,
-    longitude: 100.5018,
-    startDate: DateTime(2026, 8, 4),
-    endDate: DateTime(2026, 8, 10),
-    preferences: ['shopping', 'food'],
-    travelNotes: 'Street food crawl and night market visits.',
-  ),
-  TripListItemModel(
-    id: 'trip_003',
-    destinationName: 'Seoul',
-    destinationCountry: 'South Korea',
-    latitude: 37.5665,
-    longitude: 126.9780,
-    startDate: DateTime(2026, 9, 1),
-    endDate: DateTime(2026, 9, 7),
-    preferences: ['culture', 'family'],
-    travelNotes: 'Palaces, museums, and family-friendly attractions.',
-  ),
-];
+Map<String, dynamic> _asJsonObject(Object? value) {
+  if (value is Map<String, dynamic>) {
+    return value;
+  }
+  if (value is Map) {
+    return value.map((key, item) => MapEntry(key.toString(), item));
+  }
+  throw const ApiException(500, 'API response did not include an object.');
+}

@@ -52,19 +52,29 @@ class _EditTripPageState extends State<EditTripPage> {
     return FutureBuilder<EditTripModel?>(
       future: _tripFuture,
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
+        if (snapshot.hasError) {
+          return _EditLoadError(
+            message: snapshot.error.toString(),
+            onRetry: _refresh,
+          );
+        }
+
+        if (snapshot.connectionState != ConnectionState.done) {
           return const Center(child: CircularProgressIndicator());
         }
         final trip = snapshot.data;
         if (trip == null) {
           return const Center(
-            child: Text('No trip found. Choose a record from Home / Trip List.'),
+            child: Text(
+              'No trip found. Choose a record from Home / Trip List.',
+            ),
           );
         }
         return _EditTripForm(
           key: ValueKey(trip.id),
           model: trip,
           onRefresh: _refresh,
+          onSave: widget.dataSource.updateTrip,
         );
       },
     );
@@ -76,10 +86,12 @@ class _EditTripForm extends StatefulWidget {
     super.key,
     required this.model,
     required this.onRefresh,
+    required this.onSave,
   });
 
   final EditTripModel model;
   final VoidCallback onRefresh;
+  final Future<EditTripModel> Function(EditTripModel trip) onSave;
 
   @override
   State<_EditTripForm> createState() => _EditTripFormState();
@@ -94,6 +106,7 @@ class _EditTripFormState extends State<_EditTripForm> {
   late final Set<String> _preferences;
   late double _latitude;
   late double _longitude;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -131,8 +144,10 @@ class _EditTripFormState extends State<_EditTripForm> {
       latitude: _latitude,
       longitude: _longitude,
       startDate:
-          DateTime.tryParse(_startDateController.text) ?? widget.model.startDate,
-      endDate: DateTime.tryParse(_endDateController.text) ?? widget.model.endDate,
+          DateTime.tryParse(_startDateController.text) ??
+          widget.model.startDate,
+      endDate:
+          DateTime.tryParse(_endDateController.text) ?? widget.model.endDate,
       preferences: _preferences.toList(),
       travelNotes: _notesController.text.trim(),
       updatedAt: widget.model.updatedAt,
@@ -155,14 +170,16 @@ class _EditTripFormState extends State<_EditTripForm> {
 
   @override
   Widget build(BuildContext context) {
-    final preview = const JsonEncoder.withIndent('  ').convert(_current.toJson());
+    final preview = const JsonEncoder.withIndent(
+      '  ',
+    ).convert(_current.toJson());
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SectionHeader(
           title: 'Edit Trip',
           subtitle:
-              'Pure UI form for PUT /api/trips/:id. Editing selected record ${widget.model.id}.',
+              'Update selected record ${widget.model.id} through PUT /api/trips/:id.',
           trailing: FilledButton.tonalIcon(
             onPressed: widget.onRefresh,
             icon: const Icon(Icons.refresh_rounded),
@@ -228,16 +245,15 @@ class _EditTripFormState extends State<_EditTripForm> {
       const SizedBox(height: 10),
       Row(
         children: [
-          Expanded(child: _field('Start Date (YYYY-MM-DD)', _startDateController)),
+          Expanded(
+            child: _field('Start Date (YYYY-MM-DD)', _startDateController),
+          ),
           const SizedBox(width: 10),
           Expanded(child: _field('End Date (YYYY-MM-DD)', _endDateController)),
         ],
       ),
       const SizedBox(height: 12),
-      const Text(
-        'Preferences',
-        style: TextStyle(fontWeight: FontWeight.w600),
-      ),
+      const Text('Preferences', style: TextStyle(fontWeight: FontWeight.w600)),
       const SizedBox(height: 8),
       Wrap(
         spacing: 8,
@@ -265,9 +281,14 @@ class _EditTripFormState extends State<_EditTripForm> {
       Row(
         children: [
           FilledButton.icon(
-            onPressed: null,
-            icon: const Icon(Icons.save_rounded),
-            label: const Text('Save Changes (API Pending)'),
+            onPressed: _isSaving ? null : _saveChanges,
+            icon: _isSaving
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.save_rounded),
+            label: Text(_isSaving ? 'Saving...' : 'Save Changes'),
           ),
           const SizedBox(width: 8),
           OutlinedButton.icon(
@@ -277,10 +298,14 @@ class _EditTripFormState extends State<_EditTripForm> {
                 _countryController.text = widget.model.destinationCountry;
                 _latitude = widget.model.latitude;
                 _longitude = widget.model.longitude;
-                _startDateController.text =
-                    widget.model.startDate.toIso8601String().split('T').first;
-                _endDateController.text =
-                    widget.model.endDate.toIso8601String().split('T').first;
+                _startDateController.text = widget.model.startDate
+                    .toIso8601String()
+                    .split('T')
+                    .first;
+                _endDateController.text = widget.model.endDate
+                    .toIso8601String()
+                    .split('T')
+                    .first;
                 _notesController.text = widget.model.travelNotes;
                 _preferences
                   ..clear()
@@ -297,10 +322,7 @@ class _EditTripFormState extends State<_EditTripForm> {
     return MacPanel(
       color: AppPalette.coralA(0.06),
       child: scrollable
-          ? ListView(
-              padding: const EdgeInsets.only(top: 4),
-              children: children,
-            )
+          ? ListView(padding: const EdgeInsets.only(top: 4), children: children)
           : Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Column(
@@ -324,9 +346,9 @@ class _EditTripFormState extends State<_EditTripForm> {
           const SizedBox(height: 6),
           Text(
             'This body is ready for PUT /api/trips/${widget.model.id}.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppPalette.inkA(0.64),
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AppPalette.inkA(0.64)),
           ),
           const SizedBox(height: 10),
           Expanded(
@@ -370,13 +392,79 @@ class _EditTripFormState extends State<_EditTripForm> {
       ),
     );
   }
+
+  Future<void> _saveChanges() async {
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      final saved = await widget.onSave(_current);
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Saved ${saved.id}: ${saved.destinationName}')),
+      );
+      widget.onRefresh();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not save trip: $error')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+}
+
+class _EditLoadError extends StatelessWidget {
+  const _EditLoadError({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: MacPanel(
+        color: AppPalette.coralA(0.08),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_rounded, color: AppPalette.coral),
+            const SizedBox(height: 8),
+            Text(
+              'Could not load the selected trip',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            FilledButton.tonalIcon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _EditReadiness extends StatelessWidget {
-  const _EditReadiness({
-    required this.score,
-    required this.updatedAt,
-  });
+  const _EditReadiness({required this.score, required this.updatedAt});
 
   final double score;
   final DateTime updatedAt;
@@ -399,8 +487,9 @@ class _EditReadiness extends StatelessWidget {
                   value: score,
                   strokeWidth: 6,
                   backgroundColor: AppPalette.inkA(0.12),
-                  valueColor:
-                      const AlwaysStoppedAnimation<Color>(AppPalette.coral),
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    AppPalette.coral,
+                  ),
                 ),
                 Text('$percent%'),
               ],
@@ -418,10 +507,9 @@ class _EditReadiness extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   'Last synced: ${updatedAt.toIso8601String()}',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyMedium
-                      ?.copyWith(color: AppPalette.inkA(0.64)),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppPalette.inkA(0.64),
+                  ),
                 ),
               ],
             ),
