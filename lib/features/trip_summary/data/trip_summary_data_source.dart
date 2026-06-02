@@ -7,14 +7,18 @@ class TripSummaryDataSource {
 
   final TripListDataSource tripDataSource;
 
-  Future<TripSummaryModel?> fetchSummary(String tripId) async {
+  Future<TripSummaryModel?> fetchSummary(
+    String tripId, {
+    Map<String, int> recommendationLimits = const {},
+  }) async {
     if (tripId.trim().isEmpty) {
       return null;
     }
 
     try {
+      final query = _summaryQuery(recommendationLimits);
       final response = await tripDataSource.apiClient.getJson(
-        '/trips/$tripId/summary',
+        '/trips/$tripId/summary$query',
       );
       final data = response['data'];
       if (data is! Map) {
@@ -33,4 +37,53 @@ class TripSummaryDataSource {
       rethrow;
     }
   }
+
+  Future<WalkingRouteModel> fetchWalkingRoute({
+    required double fromLatitude,
+    required double fromLongitude,
+    required double toLatitude,
+    required double toLongitude,
+    String mode = 'walk',
+  }) async {
+    final query = Uri(
+      queryParameters: {
+        'fromLat': fromLatitude.toString(),
+        'fromLng': fromLongitude.toString(),
+        'toLat': toLatitude.toString(),
+        'toLng': toLongitude.toString(),
+        'mode': mode,
+      },
+    ).query;
+    final response = await tripDataSource.apiClient.getJson(
+      '/external/route?$query',
+    );
+    final data = response['data'];
+    if (data is! Map) {
+      throw const ApiException(
+        500,
+        'Walking route response did not include an object.',
+      );
+    }
+
+    return WalkingRouteModel.fromJson(
+      data.map((key, value) => MapEntry(key.toString(), value)),
+    );
+  }
+}
+
+String _summaryQuery(Map<String, int> recommendationLimits) {
+  final safeLimits = recommendationLimits.entries
+      .where((entry) => [3, 5, 10].contains(entry.value))
+      .map((entry) => MapEntry(entry.key.trim().toLowerCase(), entry.value))
+      .where((entry) => entry.key.isNotEmpty)
+      .toList();
+
+  if (safeLimits.isEmpty) {
+    return '';
+  }
+
+  final serialized = safeLimits
+      .map((entry) => '${entry.key}:${entry.value}')
+      .join(',');
+  return '?recommendationLimits=${Uri.encodeQueryComponent(serialized)}';
 }

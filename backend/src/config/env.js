@@ -1,4 +1,41 @@
+const fs = require("fs");
+const path = require("path");
+
 const DEFAULT_PORT = 3000;
+
+function loadDotEnv() {
+  const envFile = path.join(__dirname, "..", "..", ".env");
+  if (!fs.existsSync(envFile)) {
+    return;
+  }
+
+  const lines = fs.readFileSync(envFile, "utf8").split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+
+    const separatorIndex = trimmed.indexOf("=");
+    if (separatorIndex <= 0) {
+      continue;
+    }
+
+    let key = trimmed.slice(0, separatorIndex).trim();
+    key = key.replace(/^\uFEFF/, "");
+    let value = trimmed.slice(separatorIndex + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    if (!process.env[key]) {
+      process.env[key] = value;
+    }
+  }
+}
 
 function parsePort(rawPort) {
   if (!rawPort) {
@@ -23,6 +60,8 @@ function parseOrigins(rawOrigins) {
     .map((origin) => origin.trim())
     .filter(Boolean);
 }
+
+loadDotEnv();
 
 const env = {
   port: parsePort(process.env.PORT),

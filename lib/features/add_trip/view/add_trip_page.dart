@@ -34,6 +34,9 @@ class _AddTripPageState extends State<AddTripPage> {
   late double _latitude;
   late double _longitude;
   bool _isSaving = false;
+  bool _isLookingUpCountry = false;
+  String? _countryLookupMessage;
+  int _countryLookupRequestId = 0;
 
   @override
   void initState() {
@@ -59,29 +62,62 @@ class _AddTripPageState extends State<AddTripPage> {
   }
 
   AddTripDraftModel get _draft {
-    final start = DateTime.tryParse(_startDateController.text);
-    final end = DateTime.tryParse(_endDateController.text);
+    final start = _startDate;
+    final end = _endDate;
     return AddTripDraftModel(
       destinationName: _destinationController.text.trim(),
       destinationCountry: _countryController.text.trim(),
       latitude: _latitude,
       longitude: _longitude,
-      startDate: start ?? DateTime.now(),
-      endDate: end ?? start ?? DateTime.now(),
+      startDate: start ?? _minimumStartDate,
+      endDate: end ?? start ?? _minimumStartDate,
       preferences: _selectedPreferences.toList(),
       travelNotes: _notesController.text.trim(),
     );
   }
 
+  DateTime get _today => DateUtils.dateOnly(DateTime.now());
+
+  DateTime get _minimumStartDate => _today.add(const Duration(days: 1));
+
+  DateTime get _maximumTripDate =>
+      DateTime(_today.year + 100, _today.month, _today.day);
+
+  DateTime? get _startDate => _parseDate(_startDateController.text);
+
+  DateTime? get _endDate => _parseDate(_endDateController.text);
+
+  String? get _dateValidationMessage {
+    final start = _startDate;
+    final end = _endDate;
+    if (start == null) {
+      return 'Select a start date later than today.';
+    }
+    if (!start.isAfter(_today)) {
+      return 'Start date must be later than today.';
+    }
+    if (end == null) {
+      return 'Select an end date.';
+    }
+    if (end.isBefore(start)) {
+      return 'End date must not be earlier than start date.';
+    }
+    return null;
+  }
+
+  bool get _canCreateTrip => !_isSaving && _dateValidationMessage == null;
+
   double get _completionScore {
     var filled = 0;
     const total = 8;
+    final start = _startDate;
+    final end = _endDate;
     if (_destinationController.text.trim().isNotEmpty) filled++;
     if (_countryController.text.trim().isNotEmpty) filled++;
     if (_latitude >= -90 && _latitude <= 90) filled++;
     if (_longitude >= -180 && _longitude <= 180) filled++;
-    if (DateTime.tryParse(_startDateController.text) != null) filled++;
-    if (DateTime.tryParse(_endDateController.text) != null) filled++;
+    if (start != null && start.isAfter(_today)) filled++;
+    if (start != null && end != null && !end.isBefore(start)) filled++;
     if (_selectedPreferences.isNotEmpty) filled++;
     if (_notesController.text.trim().isNotEmpty) filled++;
     return filled / total;
@@ -139,7 +175,7 @@ class _AddTripPageState extends State<AddTripPage> {
     final children = <Widget>[
       _field('Destination Name', _destinationController),
       const SizedBox(height: 10),
-      _field('Destination Country', _countryController),
+      _field('Destination Country', _countryController, readOnly: true),
       const SizedBox(height: 10),
       OsmCoordinatePicker(
         latitude: _latitude,
@@ -148,19 +184,51 @@ class _AddTripPageState extends State<AddTripPage> {
           setState(() {
             _latitude = latitude;
             _longitude = longitude;
+            _countryController.clear();
           });
+          _lookupCountry(latitude, longitude);
         },
       ),
+      if (_isLookingUpCountry || _countryLookupMessage != null) ...[
+        const SizedBox(height: 6),
+        Text(
+          _isLookingUpCountry
+              ? 'Looking up country from pinned location...'
+              : _countryLookupMessage!,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.62)),
+        ),
+      ],
       const SizedBox(height: 10),
       Row(
         children: [
           Expanded(
-            child: _field('Start Date (YYYY-MM-DD)', _startDateController),
+            child: _dateField(
+              'Start Date',
+              _startDateController,
+              onTap: _pickStartDate,
+            ),
           ),
           const SizedBox(width: 10),
-          Expanded(child: _field('End Date (YYYY-MM-DD)', _endDateController)),
+          Expanded(
+            child: _dateField(
+              'End Date',
+              _endDateController,
+              onTap: _pickEndDate,
+            ),
+          ),
         ],
       ),
+      if (_dateValidationMessage != null) ...[
+        const SizedBox(height: 6),
+        Text(
+          _dateValidationMessage!,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: AppPalette.coral),
+        ),
+      ],
       const SizedBox(height: 12),
       const Text('Preferences', style: TextStyle(fontWeight: FontWeight.w600)),
       const SizedBox(height: 8),
@@ -170,7 +238,7 @@ class _AddTripPageState extends State<AddTripPage> {
         children: AddTripFormData.preferenceOptions.map((option) {
           final selected = _selectedPreferences.contains(option);
           return FilterChip(
-            label: Text(option),
+            label: Text(AddTripFormData.preferenceLabel(option)),
             selected: selected,
             onSelected: (value) {
               setState(() {
@@ -190,7 +258,7 @@ class _AddTripPageState extends State<AddTripPage> {
       Row(
         children: [
           FilledButton.icon(
-            onPressed: _isSaving ? null : _createTrip,
+            onPressed: _canCreateTrip ? _createTrip : null,
             icon: _isSaving
                 ? const SizedBox.square(
                     dimension: 18,
@@ -266,23 +334,123 @@ class _AddTripPageState extends State<AddTripPage> {
     );
   }
 
+  Widget _dateField(
+    String label,
+    TextEditingController controller, {
+    required VoidCallback onTap,
+  }) {
+    return TextField(
+      controller: controller,
+      readOnly: true,
+      showCursor: false,
+      onTap: onTap,
+      decoration: InputDecoration(
+        labelText: label,
+        floatingLabelBehavior: FloatingLabelBehavior.always,
+        suffixIcon: IconButton(
+          tooltip: 'Pick $label',
+          onPressed: onTap,
+          icon: const Icon(Icons.calendar_month_rounded),
+        ),
+      ),
+    );
+  }
+
   Widget _field(
     String label,
     TextEditingController controller, {
     int maxLines = 1,
+    bool readOnly = false,
   }) {
     return TextField(
       controller: controller,
       onChanged: (_) => setState(() {}),
       maxLines: maxLines,
+      readOnly: readOnly,
       decoration: InputDecoration(
         labelText: label,
         floatingLabelBehavior: FloatingLabelBehavior.always,
+        suffixIcon: readOnly ? const Icon(Icons.lock_rounded) : null,
       ),
     );
   }
 
+  DateTime? _parseDate(String value) {
+    final parsed = DateTime.tryParse(value);
+    return parsed == null ? null : DateUtils.dateOnly(parsed);
+  }
+
+  String _formatDate(DateTime date) => date.toIso8601String().split('T').first;
+
+  Future<void> _pickStartDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _initialDateForPicker(
+        firstDate: _minimumStartDate,
+        lastDate: _maximumTripDate,
+        selectedDate: _startDate,
+      ),
+      firstDate: _minimumStartDate,
+      lastDate: _maximumTripDate,
+    );
+    if (picked == null || !mounted) {
+      return;
+    }
+    final selected = DateUtils.dateOnly(picked);
+    setState(() {
+      _startDateController.text = _formatDate(selected);
+      final end = _endDate;
+      if (end != null && end.isBefore(selected)) {
+        _endDateController.clear();
+      }
+    });
+  }
+
+  Future<void> _pickEndDate() async {
+    final start = _startDate;
+    final firstDate = start != null && start.isAfter(_today)
+        ? start
+        : _minimumStartDate;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _initialDateForPicker(
+        firstDate: firstDate,
+        lastDate: _maximumTripDate,
+        selectedDate: _endDate,
+      ),
+      firstDate: firstDate,
+      lastDate: _maximumTripDate,
+    );
+    if (picked == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _endDateController.text = _formatDate(DateUtils.dateOnly(picked));
+    });
+  }
+
+  DateTime _initialDateForPicker({
+    required DateTime firstDate,
+    required DateTime lastDate,
+    required DateTime? selectedDate,
+  }) {
+    if (selectedDate != null &&
+        !selectedDate.isBefore(firstDate) &&
+        !selectedDate.isAfter(lastDate)) {
+      return selectedDate;
+    }
+    return firstDate;
+  }
+
   Future<void> _createTrip() async {
+    final dateError = _dateValidationMessage;
+    if (dateError != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(dateError)));
+      return;
+    }
+
     setState(() {
       _isSaving = true;
     });
@@ -309,6 +477,51 @@ class _AddTripPageState extends State<AddTripPage> {
       if (mounted) {
         setState(() {
           _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _lookupCountry(double latitude, double longitude) async {
+    final requestId = ++_countryLookupRequestId;
+    setState(() {
+      _isLookingUpCountry = true;
+      _countryLookupMessage = null;
+    });
+
+    try {
+      final result = await widget.dataSource.reverseGeocode(
+        latitude: latitude,
+        longitude: longitude,
+      );
+      if (!mounted) {
+        return;
+      }
+      if (requestId != _countryLookupRequestId) {
+        return;
+      }
+      setState(() {
+        if (result.country.isNotEmpty) {
+          _countryController.text = result.country;
+          _countryLookupMessage = 'Country filled: ${result.country}';
+        } else {
+          _countryLookupMessage = 'No country found for this point.';
+        }
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      if (requestId != _countryLookupRequestId) {
+        return;
+      }
+      setState(() {
+        _countryLookupMessage = 'Could not look up country: $error';
+      });
+    } finally {
+      if (mounted && requestId == _countryLookupRequestId) {
+        setState(() {
+          _isLookingUpCountry = false;
         });
       }
     }

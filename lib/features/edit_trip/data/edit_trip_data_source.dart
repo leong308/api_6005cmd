@@ -24,6 +24,16 @@ class EditTripDataSource {
     return _fromTrip(updated);
   }
 
+  Future<ReverseGeocodeResult> reverseGeocode({
+    required double latitude,
+    required double longitude,
+  }) {
+    return tripDataSource.reverseGeocode(
+      latitude: latitude,
+      longitude: longitude,
+    );
+  }
+
   EditTripModel _fromTrip(TripListItemModel trip) {
     return EditTripModel(
       id: trip.id,

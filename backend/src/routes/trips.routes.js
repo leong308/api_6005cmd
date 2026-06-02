@@ -5,14 +5,12 @@ const {
   createTrip,
   updateTrip,
   deleteTrip,
-  getTripWeather,
   getTripGooglePlaces,
-  getTripRecommendations,
-  getTripCountryInfo,
-  getTripSummary,
 } = require("../data/store");
 const { HttpError, assertRequiredFields } = require("../lib/http");
 const countryService = require("../services/countryService");
+const foursquareService = require("../services/foursquareService");
+const weatherService = require("../services/weatherService");
 
 const tripRouter = express.Router();
 
@@ -44,17 +42,52 @@ tripRouter.post("/", (req, res) => {
   });
 });
 
-tripRouter.get("/:id/weather", (req, res) => {
-  const trip = getTripById(req.params.id);
-  if (!trip) {
-    throw new HttpError(404, "Trip not found.");
-  }
+tripRouter.get("/:id/weather", async (req, res, next) => {
+  try {
+    const trip = getTripById(req.params.id);
+    if (!trip) {
+      throw new HttpError(404, "Trip not found.");
+    }
 
-  res.json({
-    success: true,
-    tripId: req.params.id,
-    data: getTripWeather(req.params.id),
-  });
+    const data = await weatherService.fetchCurrentWeather(
+      trip.latitude,
+      trip.longitude,
+    );
+
+    return res.json({
+      success: true,
+      provider: "open-meteo",
+      tripId: req.params.id,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+tripRouter.get("/:id/weather/forecast", async (req, res, next) => {
+  try {
+    const trip = getTripById(req.params.id);
+    if (!trip) {
+      throw new HttpError(404, "Trip not found.");
+    }
+
+    const data = await weatherService.fetchDailyForecast(
+      trip.latitude,
+      trip.longitude,
+      trip.startDate,
+      trip.endDate,
+    );
+
+    return res.json({
+      success: true,
+      provider: "open-meteo",
+      tripId: req.params.id,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
 });
 
 tripRouter.get("/:id/google-places", (req, res) => {
@@ -70,17 +103,38 @@ tripRouter.get("/:id/google-places", (req, res) => {
   });
 });
 
-tripRouter.get("/:id/recommendations", (req, res) => {
-  const trip = getTripById(req.params.id);
-  if (!trip) {
-    throw new HttpError(404, "Trip not found.");
-  }
+tripRouter.get("/:id/recommendations", async (req, res, next) => {
+  try {
+    const trip = getTripById(req.params.id);
+    if (!trip) {
+      throw new HttpError(404, "Trip not found.");
+    }
 
-  res.json({
-    success: true,
-    tripId: req.params.id,
-    data: getTripRecommendations(req.params.id),
-  });
+    const limit = parseRecommendationLimit(req.query.limit);
+    const limitsByPreference = parseRecommendationLimits(
+      req.query.recommendationLimits ?? req.query.limits,
+    );
+    const data = await foursquareService.fetchRecommendationGroups({
+      latitude: trip.latitude,
+      longitude: trip.longitude,
+      preferences: trip.preferences,
+      limit,
+      limitsByPreference,
+    });
+
+    return res.json({
+      success: true,
+      provider: "foursquare",
+      tripId: req.params.id,
+      limit,
+      limits: Object.fromEntries(
+        data.map((group) => [group.preference, group.limit]),
+      ),
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
 });
 
 tripRouter.get("/:id/country-info", async (req, res, next) => {
@@ -140,3 +194,33 @@ tripRouter.delete("/:id", (req, res) => {
 });
 
 module.exports = { tripRouter };
+
+function parseRecommendationLimit(value) {
+  const parsed = Number(value);
+  return [3, 5, 10].includes(parsed) ? parsed : 5;
+}
+
+function parseRecommendationLimits(value) {
+  if (Array.isArray(value)) {
+    return value.reduce(
+      (limits, item) => ({ ...limits, ...parseRecommendationLimits(item) }),
+      {},
+    );
+  }
+
+  return String(value ?? "")
+    .split(",")
+    .map((pair) => pair.trim())
+    .filter((pair) => pair.length > 0)
+    .reduce((limits, pair) => {
+      const [rawPreference, rawLimit] = pair.split(":");
+      const preference = String(rawPreference ?? "").trim().toLowerCase();
+      if (preference.length === 0) {
+        return limits;
+      }
+      return {
+        ...limits,
+        [preference]: parseRecommendationLimit(rawLimit),
+      };
+    }, {});
+}

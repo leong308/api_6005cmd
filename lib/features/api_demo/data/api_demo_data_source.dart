@@ -38,7 +38,13 @@ class ApiDemoDataSource {
       ApiEndpointModel(
         method: 'GET',
         path: '/trips/:id/weather',
-        description: 'OpenWeatherMap lookup by trip coordinates.',
+        description: 'Open-Meteo lookup by trip coordinates.',
+        group: EndpointGroup.externalData,
+      ),
+      ApiEndpointModel(
+        method: 'GET',
+        path: '/trips/:id/weather/forecast',
+        description: 'Open-Meteo daily forecast for the trip date range.',
         group: EndpointGroup.externalData,
       ),
       ApiEndpointModel(
@@ -50,13 +56,19 @@ class ApiDemoDataSource {
       ApiEndpointModel(
         method: 'GET',
         path: '/trips/:id/recommendations',
-        description: 'Preference-based suggestions from Foursquare.',
+        description: 'Live nearby recommendations from Foursquare Places.',
         group: EndpointGroup.externalData,
       ),
       ApiEndpointModel(
         method: 'GET',
         path: '/trips/:id/country-info',
         description: 'Country details from REST Countries.',
+        group: EndpointGroup.externalData,
+      ),
+      ApiEndpointModel(
+        method: 'GET',
+        path: '/external/reverse-geocode',
+        description: 'Country lookup by pinned map coordinates.',
         group: EndpointGroup.externalData,
       ),
       ApiEndpointModel(

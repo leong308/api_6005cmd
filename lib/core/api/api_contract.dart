@@ -8,6 +8,8 @@ class ApiContract {
 
   static String tripById(String id) => '$trips/$id';
   static String weather(String tripId) => '${tripById(tripId)}/weather';
+  static String weatherForecast(String tripId) =>
+      '${tripById(tripId)}/weather/forecast';
   static String googlePlaces(String tripId) =>
       '${tripById(tripId)}/google-places';
   static String recommendations(String tripId) =>

@@ -10,7 +10,6 @@ class ApiConfig {
     defaultValue: 'http://localhost:3000/api/external',
   );
 
-  static const String openWeatherApiKeyEnv = 'OPENWEATHER_API_KEY';
   static const String googlePlacesApiKeyEnv = 'GOOGLE_PLACES_API_KEY';
   static const String foursquareApiKeyEnv = 'FOURSQUARE_API_KEY';
 

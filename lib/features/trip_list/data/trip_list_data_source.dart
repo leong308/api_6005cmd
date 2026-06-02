@@ -60,6 +60,22 @@ class TripListDataSource {
     return updated;
   }
 
+  Future<ReverseGeocodeResult> reverseGeocode({
+    required double latitude,
+    required double longitude,
+  }) async {
+    final query = Uri(
+      queryParameters: {
+        'lat': latitude.toString(),
+        'lng': longitude.toString(),
+      },
+    ).query;
+    final response = await apiClient.getJson(
+      '/external/reverse-geocode?$query',
+    );
+    return ReverseGeocodeResult.fromJson(_asJsonObject(response['data']));
+  }
+
   List<TripListItemModel> _mergeKnownTrips(List<TripListItemModel> apiTrips) {
     final merged = <String, TripListItemModel>{
       for (final trip in apiTrips) trip.id: trip,
@@ -67,6 +83,32 @@ class TripListDataSource {
     };
     final trips = merged.values.toList()..sort((a, b) => a.id.compareTo(b.id));
     return trips;
+  }
+}
+
+class ReverseGeocodeResult {
+  const ReverseGeocodeResult({
+    required this.country,
+    required this.countryCode,
+    required this.displayName,
+    required this.latitude,
+    required this.longitude,
+  });
+
+  final String country;
+  final String countryCode;
+  final String displayName;
+  final double latitude;
+  final double longitude;
+
+  factory ReverseGeocodeResult.fromJson(Map<String, dynamic> json) {
+    return ReverseGeocodeResult(
+      country: json['country']?.toString() ?? '',
+      countryCode: json['countryCode']?.toString() ?? '',
+      displayName: json['displayName']?.toString() ?? '',
+      latitude: _asDouble(json['latitude']),
+      longitude: _asDouble(json['longitude']),
+    );
   }
 }
 
@@ -78,4 +120,11 @@ Map<String, dynamic> _asJsonObject(Object? value) {
     return value.map((key, item) => MapEntry(key.toString(), item));
   }
   throw const ApiException(500, 'API response did not include an object.');
+}
+
+double _asDouble(Object? value) {
+  if (value is num) {
+    return value.toDouble();
+  }
+  return double.tryParse(value?.toString() ?? '') ?? 0;
 }

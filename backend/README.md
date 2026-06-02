@@ -32,6 +32,7 @@ This matches `lib/core/api/api_config.dart`.
 - `PUT /api/trips/:id`
 - `DELETE /api/trips/:id`
 - `GET /api/trips/:id/weather`
+- `GET /api/trips/:id/weather/forecast`
 - `GET /api/trips/:id/google-places`
 - `GET /api/trips/:id/recommendations`
 - `GET /api/trips/:id/country-info`
@@ -40,12 +41,19 @@ This matches `lib/core/api/api_config.dart`.
 - `POST /api/auth/login`
 - `GET /api/auth/profile`
 - `GET /api/external/weather`
+- `GET /api/external/weather/forecast`
 - `GET /api/external/google-places`
 - `GET /api/external/recommendations`
+- `GET /api/external/route`
+- `GET /api/external/walking-route`
 - `GET /api/external/country-info`
+- `GET /api/external/reverse-geocode`
 
 ## Notes
 
 - Trip data is persisted locally in `backend/.data/trips.json` for development.
 - Auth uses bcrypt password hashes and JWT bearer tokens.
-- External endpoints are provider-ready stubs returning deterministic payloads.
+- `GET /api/external/weather`, `GET /api/external/weather/forecast`, `GET /api/trips/:id/weather`, and `GET /api/trips/:id/weather/forecast` use live Open-Meteo data and do not require an API key.
+- `GET /api/external/recommendations` and `GET /api/trips/:id/recommendations` use live Foursquare Places data when `FOURSQUARE_API_KEY` is configured in `backend/.env`.
+- `GET /api/external/route` uses Google Maps Routes API when `GOOGLE_ROUTES_API_KEY` is configured in `backend/.env`. Pass `mode=walk`, `mode=car`, `mode=bus`, or `mode=rail`.
+- Google Places endpoints are provider-ready stubs returning deterministic payloads.
