@@ -14,21 +14,9 @@ const ROUTE_MODES = {
   },
   car: {
     mode: "car",
-    label: "Car",
+    label: "Vehicle",
     travelMode: "DRIVE",
     transitModes: [],
-  },
-  bus: {
-    mode: "bus",
-    label: "Bus",
-    travelMode: "TRANSIT",
-    transitModes: ["BUS"],
-  },
-  rail: {
-    mode: "rail",
-    label: "Train / LRT / MRT",
-    travelMode: "TRANSIT",
-    transitModes: ["RAIL"],
   },
 };
 
@@ -138,13 +126,6 @@ function buildRouteRequest({
     units: "METRIC",
   };
 
-  if (routeMode.travelMode === "TRANSIT") {
-    request.transitPreferences = {
-      allowedTravelModes: routeMode.transitModes,
-      routingPreference: "FEWER_TRANSFERS",
-    };
-  }
-
   return request;
 }
 
@@ -152,12 +133,9 @@ function routeModeConfig(value) {
   const normalized = String(value ?? "").trim().toLowerCase();
   const aliases = {
     walking: "walk",
+    vehicle: "car",
     drive: "car",
     driving: "car",
-    train: "rail",
-    lrt: "rail",
-    mrt: "rail",
-    transit: "rail",
   };
   const key = aliases[normalized] ?? normalized;
   return ROUTE_MODES[key] ?? ROUTE_MODES.walk;

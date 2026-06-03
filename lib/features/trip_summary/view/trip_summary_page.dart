@@ -13,7 +13,6 @@ import 'package:latlong2/latlong.dart';
 
 enum _SummaryTab {
   overview('Overview', Icons.space_dashboard_rounded),
-  modules('Modules', Icons.widgets_rounded),
   json('JSON', Icons.code_rounded);
 
   const _SummaryTab(this.label, this.icon);
@@ -32,9 +31,7 @@ typedef _WalkingRouteLoader =
 
 enum _RouteMode {
   walk('walk', 'Walk', Icons.directions_walk_rounded),
-  car('car', 'Car', Icons.directions_car_rounded),
-  bus('bus', 'Bus', Icons.directions_bus_rounded),
-  rail('rail', 'Train / LRT / MRT', Icons.train_rounded);
+  vehicle('car', 'Vehicle', Icons.directions_car_rounded);
 
   const _RouteMode(this.value, this.label, this.icon);
 
@@ -135,7 +132,7 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
             SectionHeader(
               title: 'Trip Details / Smart Travel Summary',
               subtitle:
-                  'One linked story from one trip record. Switch views to inspect by narrative, module, or raw payload.',
+                  'One linked story from one trip record. Switch views to inspect the overview or raw payload.',
               trailing: FilledButton.tonalIcon(
                 onPressed: _refreshMock,
                 icon: const Icon(Icons.sync_rounded),
@@ -166,10 +163,6 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
                       routeLoader: widget.dataSource.fetchWalkingRoute,
                       recommendationLimits: _recommendationLimits,
                       onRecommendationLimitChanged: _setRecommendationLimit,
-                    ),
-                    _SummaryTab.modules => _ModulesTab(
-                      summary: summary,
-                      routeLoader: widget.dataSource.fetchWalkingRoute,
                     ),
                     _SummaryTab.json => _JsonTab(json: json),
                   },
@@ -270,8 +263,6 @@ class _OverviewTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       children: [
-        _OverviewMetrics(summary: summary),
-        const SizedBox(height: 12),
         _TripDetailsCard(summary: summary),
         const SizedBox(height: 12),
         _MiniForecastPattern(forecast: summary.dailyWeatherForecast),
@@ -289,36 +280,6 @@ class _OverviewTab extends StatelessWidget {
           children: [
             FilledButton(onPressed: onEditTrip, child: const Text('Edit Trip')),
           ],
-        ),
-      ],
-    );
-  }
-}
-
-class _OverviewMetrics extends StatelessWidget {
-  const _OverviewMetrics({required this.summary});
-
-  final TripSummaryModel summary;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        _MetricPanel(
-          label: 'Nearby Places',
-          value: '${summary.googlePlaces.length}',
-          hint: 'Google Places',
-          tone: AppPalette.mintA(0.1),
-          icon: Icons.place_rounded,
-        ),
-        _MetricPanel(
-          label: 'Country',
-          value: summary.countryInfo.country,
-          hint: summary.countryInfo.region,
-          tone: AppPalette.inkA(0.08),
-          icon: Icons.public_rounded,
         ),
       ],
     );
@@ -352,59 +313,7 @@ class _OverviewRecommendationCard extends StatelessWidget {
   }
 }
 
-class _MetricPanel extends StatelessWidget {
-  const _MetricPanel({
-    required this.label,
-    required this.value,
-    required this.hint,
-    required this.tone,
-    required this.icon,
-  });
-
-  final String label;
-  final String value;
-  final String hint;
-  final Color tone;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 250,
-      child: MacPanel(
-        color: tone,
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            Icon(icon, color: AppPalette.inkA(0.88)),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppPalette.inkA(0.65),
-                    ),
-                  ),
-                  Text(value, style: Theme.of(context).textTheme.titleMedium),
-                  Text(
-                    hint,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppPalette.inkA(0.65),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
+// ignore: unused_element
 class _ModulesTab extends StatelessWidget {
   const _ModulesTab({required this.summary, required this.routeLoader});
 
@@ -424,8 +333,6 @@ class _ModulesTab extends StatelessWidget {
             ).textTheme.bodyMedium?.copyWith(color: AppPalette.inkA(0.82)),
           ),
         ),
-        const SizedBox(height: 12),
-        _DataCards(summary: summary, routeLoader: routeLoader),
       ],
     );
   }
@@ -450,125 +357,145 @@ class _TripDetailsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final trip = summary.trip;
+    final destination = trip.destinationName.trim().isEmpty
+        ? 'Untitled destination'
+        : trip.destinationName.trim();
+    final country = trip.destinationCountry.trim().isEmpty
+        ? 'Country unavailable'
+        : trip.destinationCountry.trim();
+    final coordinateLabel =
+        '${trip.latitude.toStringAsFixed(4)}, ${trip.longitude.toStringAsFixed(4)}';
+    final notes = trip.travelNotes.trim();
+
     return MacPanel(
+      color: AppPalette.whiteA(0.9),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(
-                Icons.flight_takeoff_rounded,
-                color: AppPalette.coral,
-                size: 22,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Trip Details',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontSize: 20),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 16,
-            runSpacing: 8,
-            children: [
-              _detail(
-                'Destination',
-                '${trip.destinationName}, ${trip.destinationCountry}',
-              ),
-              _detail('Date', trip.dateRangeLabel),
-              _detail('Preferences', _preferenceListLabel(trip.preferences)),
-              _coordinateDetail(
-                context,
-                label: 'Coordinates',
-                latitude: trip.latitude,
-                longitude: trip.longitude,
-                title: trip.destinationName,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Notes: ${trip.travelNotes}',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _detail(String label, String value) {
-    return SizedBox(
-      width: 260,
-      child: RichText(
-        text: TextSpan(
-          style: const TextStyle(
-            color: AppPalette.ink,
-            fontSize: 14,
-            height: 1.4,
-          ),
-          children: [
-            TextSpan(
-              text: '$label: ',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: AppPalette.inkA(0.66),
-              ),
-            ),
-            TextSpan(text: value),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _coordinateDetail(
-    BuildContext context, {
-    required String label,
-    required double latitude,
-    required double longitude,
-    required String title,
-  }) {
-    return SizedBox(
-      width: 260,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: RichText(
-              text: TextSpan(
-                style: const TextStyle(
-                  color: AppPalette.ink,
-                  fontSize: 14,
-                  height: 1.4,
+              Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppPalette.coralA(0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppPalette.coralA(0.26)),
                 ),
-                children: [
-                  TextSpan(
-                    text: '$label: ',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: AppPalette.inkA(0.66),
-                    ),
-                  ),
-                  TextSpan(
-                    text:
-                        '${latitude.toStringAsFixed(4)}, ${longitude.toStringAsFixed(4)}',
-                  ),
-                ],
+                child: const Icon(
+                  Icons.flight_takeoff_rounded,
+                  color: AppPalette.coral,
+                  size: 24,
+                ),
               ),
-            ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      destination,
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            color: AppPalette.ink,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      country,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppPalette.inkA(0.68),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 6),
-          _MapIconButton(
-            tooltip: 'Open pinned trip location',
-            onPressed: () => _showPinnedMapDialog(
-              context,
-              title: title,
-              latitude: latitude,
-              longitude: longitude,
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _TripDetailTile(
+                icon: Icons.event_rounded,
+                label: 'Date Range',
+                value: trip.dateRangeLabel,
+                supporting: '${trip.totalDays} days',
+                tone: AppPalette.blueA(0.08),
+              ),
+              _TripDetailTile(
+                icon: Icons.tune_rounded,
+                label: 'Preferences',
+                value: _preferenceListLabel(trip.preferences),
+                supporting: '${trip.preferences.length} selected',
+                tone: AppPalette.mintA(0.08),
+                width: 340,
+              ),
+              _TripDetailTile(
+                icon: Icons.location_on_rounded,
+                label: 'Coordinates',
+                value: coordinateLabel,
+                supporting: 'Pinned trip location',
+                tone: AppPalette.coralA(0.08),
+                width: 300,
+                trailing: _MapIconButton(
+                  tooltip: 'Open pinned trip location',
+                  onPressed: () => _showPinnedMapDialog(
+                    context,
+                    title: destination,
+                    latitude: trip.latitude,
+                    longitude: trip.longitude,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppPalette.inkA(0.035),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppPalette.inkA(0.08)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.sticky_note_2_rounded,
+                  color: AppPalette.inkA(0.62),
+                  size: 20,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Travel Notes',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppPalette.inkA(0.62),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        notes.isEmpty ? 'No travel notes added.' : notes,
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodyMedium?.copyWith(height: 1.35),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -577,57 +504,82 @@ class _TripDetailsCard extends StatelessWidget {
   }
 }
 
-class _DataCards extends StatelessWidget {
-  const _DataCards({required this.summary, required this.routeLoader});
+class _TripDetailTile extends StatelessWidget {
+  const _TripDetailTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.tone,
+    this.supporting,
+    this.trailing,
+    this.width = 260,
+  });
 
-  final TripSummaryModel summary;
-  final _WalkingRouteLoader routeLoader;
+  final IconData icon;
+  final String label;
+  final String value;
+  final String? supporting;
+  final Widget? trailing;
+  final Color tone;
+  final double width;
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        SizedBox(
-          width: 340,
-          child: MacPanel(
-            color: AppPalette.blueA(0.08),
-            child: _WeatherView(weather: summary.weather),
+    return ConstrainedBox(
+      constraints: BoxConstraints(minWidth: 230, maxWidth: width),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: tone,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppPalette.inkA(0.08)),
+            ),
+            child: Icon(icon, size: 20, color: AppPalette.inkA(0.78)),
           ),
-        ),
-        SizedBox(
-          width: 692,
-          child: MacPanel(
-            color: AppPalette.blueA(0.06),
-            child: _DailyForecastView(forecast: summary.dailyWeatherForecast),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppPalette.inkA(0.58),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppPalette.ink,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (supporting != null && supporting!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 1),
+                  Text(
+                    supporting!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppPalette.inkA(0.58),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
-        ),
-        SizedBox(
-          width: 340,
-          child: MacPanel(
-            color: AppPalette.mintA(0.08),
-            child: _PlaceView(places: summary.googlePlaces),
-          ),
-        ),
-        SizedBox(
-          width: 340,
-          child: _RecommendationGroupsView(
-            groups: summary.foursquareRecommendationGroups,
-            startLatitude: summary.trip.latitude,
-            startLongitude: summary.trip.longitude,
-            routeLoader: routeLoader,
-            recommendationLimits: summary.recommendationLimits,
-          ),
-        ),
-        SizedBox(
-          width: 340,
-          child: MacPanel(
-            color: AppPalette.inkA(0.06),
-            child: _CountryView(info: summary.countryInfo),
-          ),
-        ),
-      ],
+          if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+        ],
+      ),
     );
   }
 }
@@ -953,40 +905,6 @@ class _ForecastConnector extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _PlaceView extends StatelessWidget {
-  const _PlaceView({required this.places});
-
-  final List<PlaceModel> places;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(Icons.place_rounded, color: AppPalette.mint, size: 20),
-            const SizedBox(width: 8),
-            Text(
-              'Google Places Nearby',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        for (final place in places)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: _item(
-              place.name,
-              '${place.type} • ${place.rating} ★\n${place.address}',
-            ),
-          ),
-      ],
     );
   }
 }
