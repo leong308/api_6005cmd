@@ -4,12 +4,11 @@ import 'package:api_6005cmd/app/theme/app_palette.dart';
 import 'package:api_6005cmd/features/add_trip/data/add_trip_form_data.dart';
 import 'package:api_6005cmd/features/trip_summary/data/trip_summary_data_source.dart';
 import 'package:api_6005cmd/features/trip_summary/model/trip_summary_model.dart';
+import 'package:api_6005cmd/shared/view/free_vector_map.dart';
 import 'package:api_6005cmd/shared/view/layer_badges.dart';
 import 'package:api_6005cmd/shared/view/mac_panel.dart';
 import 'package:api_6005cmd/shared/view/section_header.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
 
 enum _SummaryTab {
   overview('Overview', Icons.space_dashboard_rounded),
@@ -267,6 +266,8 @@ class _OverviewTab extends StatelessWidget {
         const SizedBox(height: 12),
         _MiniForecastPattern(forecast: summary.dailyWeatherForecast),
         const SizedBox(height: 12),
+        _TripAgendaCard(agenda: summary.tripAgenda),
+        const SizedBox(height: 12),
         _OverviewRecommendationCard(
           summary: summary,
           routeLoader: routeLoader,
@@ -309,31 +310,6 @@ class _OverviewRecommendationCard extends StatelessWidget {
       routeLoader: routeLoader,
       recommendationLimits: recommendationLimits,
       onRecommendationLimitChanged: onRecommendationLimitChanged,
-    );
-  }
-}
-
-// ignore: unused_element
-class _ModulesTab extends StatelessWidget {
-  const _ModulesTab({required this.summary, required this.routeLoader});
-
-  final TripSummaryModel summary;
-  final _WalkingRouteLoader routeLoader;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      children: [
-        MacPanel(
-          color: AppPalette.whiteA(0.88),
-          child: Text(
-            'Flow: Trip Record → Weather / Nearby Places / Recommendations / Country Info',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: AppPalette.inkA(0.82)),
-          ),
-        ),
-      ],
     );
   }
 }
@@ -584,147 +560,6 @@ class _TripDetailTile extends StatelessWidget {
   }
 }
 
-class _WeatherView extends StatelessWidget {
-  const _WeatherView({required this.weather});
-
-  final WeatherModel weather;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(
-              Icons.wb_twilight_rounded,
-              color: AppPalette.blue,
-              size: 20,
-            ),
-            const SizedBox(width: 8),
-            Text('Weather', style: Theme.of(context).textTheme.titleMedium),
-          ],
-        ),
-        const SizedBox(height: 10),
-        _item('Temperature', _temperatureLabel(weather)),
-        if (weather.feelsLike != null)
-          _item(
-            'Feels Like',
-            '${_formatNumber(weather.feelsLike!)}${_temperatureUnit(weather.units)}',
-          ),
-        _item('Condition', weather.condition),
-        _item('Humidity', '${weather.humidity}%'),
-        _item('Wind', '${_formatNumber(weather.windSpeed)} m/s'),
-        if (weather.pressure != null)
-          _item('Pressure', '${weather.pressure} hPa'),
-        if (_weatherLocationLabel(weather).isNotEmpty)
-          _item('Observed Location', _weatherLocationLabel(weather)),
-        if (weather.observedAt.isNotEmpty)
-          _item('Observed At', weather.observedAt),
-      ],
-    );
-  }
-}
-
-class _DailyForecastView extends StatelessWidget {
-  const _DailyForecastView({required this.forecast});
-
-  final DailyWeatherForecastModel forecast;
-
-  @override
-  Widget build(BuildContext context) {
-    final days = forecast.daily;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(
-              Icons.calendar_month_rounded,
-              color: AppPalette.blue,
-              size: 20,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'Daily Weather Forecast (${days.length} days)',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ],
-        ),
-        if (forecast.startDate.isNotEmpty && forecast.endDate.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Text(
-            '${forecast.startDate} to ${forecast.endDate}',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.62)),
-          ),
-        ],
-        const SizedBox(height: 10),
-        if (days.isEmpty)
-          Text(
-            forecast.message.isEmpty
-                ? 'Daily forecast unavailable for this trip date range.'
-                : forecast.message,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: AppPalette.inkA(0.72)),
-          )
-        else
-          Column(
-            children: [
-              for (final day in days)
-                _ForecastDayRow(day: day, units: forecast.units),
-            ],
-          ),
-      ],
-    );
-  }
-}
-
-class _ForecastDayRow extends StatelessWidget {
-  const _ForecastDayRow({required this.day, required this.units});
-
-  final DailyWeatherForecastDayModel day;
-  final String units;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(width: 96, child: Text(day.date)),
-          Icon(_forecastIcon(day.iconCode), color: AppPalette.blue, size: 20),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  day.condition,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                Text(
-                  [
-                    _forecastTemperatureRange(day, units),
-                    _forecastRainLabel(day),
-                    _forecastWindLabel(day),
-                  ].where((part) => part.isNotEmpty).join('  |  '),
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.68)),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _MiniForecastPattern extends StatefulWidget {
   const _MiniForecastPattern({required this.forecast});
 
@@ -905,6 +740,519 @@ class _ForecastConnector extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _TripAgendaCard extends StatelessWidget {
+  const _TripAgendaCard({required this.agenda});
+
+  final TripAgendaModel agenda;
+
+  @override
+  Widget build(BuildContext context) {
+    if (agenda.days.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return MacPanel(
+      color: AppPalette.mintA(0.07),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.route_rounded, color: AppPalette.mint),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Trip Agenda / Tour Guide',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              Text(
+                '${agenda.tripDays} days',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppPalette.inkA(0.62),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            agenda.pattern.isEmpty
+                ? agenda.title
+                : '${agenda.title} • ${agenda.pattern}',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.66)),
+          ),
+          const SizedBox(height: 12),
+          Column(
+            children: [
+              for (var index = 0; index < agenda.days.length; index++) ...[
+                _TripAgendaDayTile(day: agenda.days[index]),
+                if (index != agenda.days.length - 1)
+                  Divider(color: AppPalette.inkA(0.1), height: 18),
+              ],
+            ],
+          ),
+          if (agenda.checklist.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: agenda.checklist
+                  .map((item) => _AgendaChecklistChip(label: item))
+                  .toList(),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _TripAgendaDayTile extends StatelessWidget {
+  const _TripAgendaDayTile({required this.day});
+
+  final TripAgendaDayModel day;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 92,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                day.label,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                _shortDateLabel(day.date),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.62)),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                day.theme,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              if (day.weatherNote.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  day.weatherNote,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.66)),
+                ),
+              ],
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: day.items
+                    .map((item) => _AgendaItemChip(item: item))
+                    .toList(),
+              ),
+              const SizedBox(height: 10),
+              _AgendaDayRouteMap(routeMap: day.routeMap),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AgendaDayRouteMap extends StatelessWidget {
+  const _AgendaDayRouteMap({required this.routeMap});
+
+  final AgendaRouteMapModel routeMap;
+
+  @override
+  Widget build(BuildContext context) {
+    final markerPoints = routeMap.markers
+        .where((marker) => marker.latitude != null && marker.longitude != null)
+        .map(
+          (marker) => FreeVectorMapPoint(
+            latitude: marker.latitude!,
+            longitude: marker.longitude!,
+            color: _colorFromHex(marker.color, fallback: AppPalette.blue),
+            radius: marker.kind == 'start' ? 8 : 6.8,
+          ),
+        )
+        .toList();
+    final routeLines = routeMap.legs
+        .where((leg) => leg.path.length > 1)
+        .map(
+          (leg) => FreeVectorMapRoute(
+            points: leg.path
+                .map(
+                  (point) => FreeVectorMapPoint(
+                    latitude: point.latitude,
+                    longitude: point.longitude,
+                    color: _colorFromHex(leg.color, fallback: AppPalette.blue),
+                    radius: 0,
+                  ),
+                )
+                .toList(),
+            color: _colorFromHex(leg.color, fallback: AppPalette.blue),
+            width: leg.routeAvailable ? 5 : 3.2,
+            opacity: leg.routeAvailable ? 0.94 : 0.54,
+          ),
+        )
+        .toList();
+
+    if (markerPoints.length < 2 && routeLines.isEmpty) {
+      return _AgendaRouteUnavailable(message: routeMap.message);
+    }
+
+    final center = markerPoints.isNotEmpty
+        ? markerPoints.first
+        : routeLines.first.points.first;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppPalette.whiteA(0.62),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppPalette.blueA(0.16)),
+      ),
+      padding: const EdgeInsets.all(10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.map_rounded, color: AppPalette.blue, size: 18),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  'Day Route Overview',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w800),
+                ),
+              ),
+              Text(
+                routeMap.modeLabel,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppPalette.inkA(0.62),
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _AgendaRouteStatChip(
+                icon: Icons.route_rounded,
+                label: _formatRouteDistance(routeMap.totalDistanceMeters),
+              ),
+              _AgendaRouteStatChip(
+                icon: Icons.schedule_rounded,
+                label: _formatRouteDuration(routeMap.totalDurationSeconds),
+              ),
+              _AgendaRouteStatChip(
+                icon: Icons.timeline_rounded,
+                label: '${routeMap.legCount} legs',
+              ),
+            ],
+          ),
+          if (routeMap.message.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              routeMap.message,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.58)),
+            ),
+          ],
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: SizedBox(
+              height: 260,
+              child: FreeVectorMap(
+                centerLatitude: center.latitude,
+                centerLongitude: center.longitude,
+                initialZoom: 13,
+                fitToBounds: true,
+                routes: routeLines,
+                markers: markerPoints,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final leg in routeMap.legs) ...[
+                  _AgendaRouteLegendChip(leg: leg),
+                  const SizedBox(width: 8),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AgendaRouteUnavailable extends StatelessWidget {
+  const _AgendaRouteUnavailable({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppPalette.whiteA(0.62),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppPalette.inkA(0.1)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.map_outlined, color: AppPalette.blue, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message.isEmpty
+                  ? 'Route overview appears when recommendation coordinates are available.'
+                  : message,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.62)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AgendaRouteStatChip extends StatelessWidget {
+  const _AgendaRouteStatChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppPalette.blueA(0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppPalette.blueA(0.16)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: AppPalette.blue),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppPalette.inkA(0.72),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AgendaRouteLegendChip extends StatelessWidget {
+  const _AgendaRouteLegendChip({required this.leg});
+
+  final AgendaRouteLegModel leg;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _colorFromHex(leg.color, fallback: AppPalette.blue);
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 250),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+      decoration: BoxDecoration(
+        color: AppPalette.whiteA(0.74),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppPalette.inkA(0.1)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 7),
+          Flexible(
+            child: Text(
+              '${leg.legNumber}. ${leg.toTitle}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppPalette.inkA(0.74),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(width: 7),
+          Text(
+            _formatRouteDistance(leg.distanceMeters),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppPalette.inkA(0.54),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AgendaItemChip extends StatelessWidget {
+  const _AgendaItemChip({required this.item});
+
+  final TripAgendaItemModel item;
+
+  @override
+  Widget build(BuildContext context) {
+    final isVerified = item.availability.verifiedForVisitTime;
+    return Container(
+      width: 286,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppPalette.whiteA(0.72),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppPalette.mintA(0.22)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                _agendaKindIcon(item.kind),
+                color: item.kind == 'food' ? AppPalette.coral : AppPalette.mint,
+                size: 17,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  item.timeOfDay,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppPalette.inkA(0.68),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Text(
+                item.visitWindow,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppPalette.inkA(0.62),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+            decoration: BoxDecoration(
+              color: isVerified
+                  ? AppPalette.mintA(0.12)
+                  : AppPalette.coralA(0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: isVerified
+                    ? AppPalette.mintA(0.28)
+                    : AppPalette.coralA(0.28),
+              ),
+            ),
+            child: Text(
+              isVerified ? 'Open at visit time' : 'Flexible backup',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: isVerified ? AppPalette.mint : AppPalette.coral,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            item.title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          if (item.description.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              item.description,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.66)),
+            ),
+          ],
+          if (item.address.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              item.address,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.58)),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AgendaChecklistChip extends StatelessWidget {
+  const _AgendaChecklistChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(
+      avatar: const Icon(Icons.check_circle_rounded, size: 16),
+      label: Text(label),
+      side: BorderSide(color: AppPalette.mintA(0.22)),
+      backgroundColor: AppPalette.whiteA(0.72),
+      labelStyle: Theme.of(
+        context,
+      ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.74)),
     );
   }
 }
@@ -1251,7 +1599,6 @@ Future<void> _showPinnedMapDialog(
   required double latitude,
   required double longitude,
 }) {
-  final point = LatLng(latitude, longitude);
   return showDialog<void>(
     context: context,
     builder: (context) {
@@ -1298,36 +1645,16 @@ Future<void> _showPinnedMapDialog(
                   borderRadius: BorderRadius.circular(10),
                   child: SizedBox(
                     height: 360,
-                    child: FlutterMap(
-                      options: MapOptions(
-                        initialCenter: point,
-                        initialZoom: 14,
-                        minZoom: 2,
-                        maxZoom: 18,
-                        interactionOptions: const InteractionOptions(
-                          flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-                        ),
-                      ),
-                      children: [
-                        TileLayer(
-                          urlTemplate:
-                              'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-                          subdomains: const ['a', 'b', 'c', 'd'],
-                          userAgentPackageName: 'com.api_6005cmd.app',
-                        ),
-                        MarkerLayer(
-                          markers: [
-                            Marker(
-                              point: point,
-                              width: 44,
-                              height: 44,
-                              child: const Icon(
-                                Icons.location_on_rounded,
-                                color: AppPalette.coral,
-                                size: 38,
-                              ),
-                            ),
-                          ],
+                    child: FreeVectorMap(
+                      centerLatitude: latitude,
+                      centerLongitude: longitude,
+                      initialZoom: 17,
+                      markers: [
+                        FreeVectorMapPoint(
+                          latitude: latitude,
+                          longitude: longitude,
+                          color: AppPalette.coral,
+                          radius: 9,
                         ),
                       ],
                     ),
@@ -1337,7 +1664,7 @@ Future<void> _showPinnedMapDialog(
                 Align(
                   alignment: Alignment.centerRight,
                   child: Text(
-                    'Map data © OpenStreetMap contributors © CARTO',
+                    FreeVectorMap.attribution,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: AppPalette.inkA(0.55),
                     ),
@@ -1643,10 +1970,15 @@ class _WalkingRouteMap extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final routePoints = route.path
-        .map((point) => LatLng(point.latitude, point.longitude))
+        .map(
+          (point) => FreeVectorMapPoint(
+            latitude: point.latitude,
+            longitude: point.longitude,
+            color: AppPalette.blue,
+            radius: 0,
+          ),
+        )
         .toList();
-    final start = LatLng(fromLatitude, fromLongitude);
-    final end = LatLng(toLatitude, toLongitude);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
@@ -1655,55 +1987,29 @@ class _WalkingRouteMap extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           child: SizedBox(
             height: 380,
-            child: FlutterMap(
-              options: MapOptions(
-                initialCenter: _midpoint(start, end),
-                initialZoom: _initialRouteZoom(start, end),
-                minZoom: 2,
-                maxZoom: 18,
-                interactionOptions: const InteractionOptions(
-                  flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-                ),
+            child: FreeVectorMap(
+              centerLatitude: (fromLatitude + toLatitude) / 2,
+              centerLongitude: (fromLongitude + toLongitude) / 2,
+              initialZoom: _initialRouteZoom(
+                fromLatitude,
+                fromLongitude,
+                toLatitude,
+                toLongitude,
               ),
-              children: [
-                TileLayer(
-                  urlTemplate:
-                      'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-                  subdomains: const ['a', 'b', 'c', 'd'],
-                  userAgentPackageName: 'com.api_6005cmd.app',
+              fitToBounds: true,
+              route: routePoints,
+              markers: [
+                FreeVectorMapPoint(
+                  latitude: fromLatitude,
+                  longitude: fromLongitude,
+                  color: AppPalette.blue,
+                  radius: 7,
                 ),
-                PolylineLayer(
-                  polylines: [
-                    Polyline(
-                      points: routePoints,
-                      color: AppPalette.blue,
-                      strokeWidth: 4,
-                    ),
-                  ],
-                ),
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: start,
-                      width: 42,
-                      height: 42,
-                      child: const Icon(
-                        Icons.trip_origin_rounded,
-                        color: AppPalette.blue,
-                        size: 26,
-                      ),
-                    ),
-                    Marker(
-                      point: end,
-                      width: 44,
-                      height: 44,
-                      child: const Icon(
-                        Icons.location_on_rounded,
-                        color: AppPalette.coral,
-                        size: 38,
-                      ),
-                    ),
-                  ],
+                FreeVectorMapPoint(
+                  latitude: toLatitude,
+                  longitude: toLongitude,
+                  color: AppPalette.coral,
+                  radius: 9,
                 ),
               ],
             ),
@@ -1711,76 +2017,11 @@ class _WalkingRouteMap extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'Map data © OpenStreetMap contributors © CARTO',
+          FreeVectorMap.attribution,
           style: Theme.of(
             context,
           ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.55)),
         ),
-      ],
-    );
-  }
-}
-
-class _CountryView extends StatelessWidget {
-  const _CountryView({required this.info});
-
-  final CountryInfoModel info;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasFlagUrl = info.flag.startsWith('http');
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                const Icon(
-                  Icons.public_rounded,
-                  color: AppPalette.ink,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Country Information',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ],
-            ),
-            if (hasFlagUrl)
-              Container(
-                decoration: BoxDecoration(
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: Image.network(
-                    info.flag,
-                    height: 24,
-                    width: 36,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) =>
-                        const Icon(Icons.flag),
-                  ),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        _item('Country', info.country),
-        _item('Capital', info.capital),
-        _item('Currency', info.currency),
-        _item('Language', info.languages.join(', ')),
-        _item('Region', info.region),
-        if (!hasFlagUrl) _item('Flag', info.flag),
       ],
     );
   }
@@ -1827,24 +2068,6 @@ class _SummaryJsonCard extends StatelessWidget {
   }
 }
 
-Widget _item(String label, String value) {
-  return RichText(
-    text: TextSpan(
-      style: const TextStyle(color: AppPalette.ink, fontSize: 14, height: 1.4),
-      children: [
-        TextSpan(
-          text: '$label: ',
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            color: AppPalette.inkA(0.66),
-          ),
-        ),
-        TextSpan(text: value),
-      ],
-    ),
-  );
-}
-
 String _recommendationTitleForPreference(String preference) {
   return '${AddTripFormData.preferenceLabel(preference)} Recommendations';
 }
@@ -1866,15 +2089,15 @@ IconData _recommendationIconForPreference(String preference) {
   };
 }
 
+IconData _agendaKindIcon(String kind) {
+  return kind == 'food' ? Icons.restaurant_menu_rounded : Icons.place_rounded;
+}
+
 String _preferenceListLabel(List<String> preferences) {
   if (preferences.isEmpty) {
     return 'None selected';
   }
   return preferences.map(AddTripFormData.preferenceLabel).join(', ');
-}
-
-String _temperatureLabel(WeatherModel weather) {
-  return '${_formatNumber(weather.temperature)}${_temperatureUnit(weather.units)}';
 }
 
 String _temperatureUnit(String units) {
@@ -1893,14 +2116,6 @@ String _formatNumber(num value) {
   return asDouble.toStringAsFixed(1);
 }
 
-String _weatherLocationLabel(WeatherModel weather) {
-  final parts = [
-    weather.cityName.trim(),
-    weather.countryCode.trim(),
-  ].where((part) => part.isNotEmpty).toList();
-  return parts.join(', ');
-}
-
 IconData _forecastIcon(String iconCode) {
   return switch (iconCode) {
     'clear' => Icons.wb_sunny_rounded,
@@ -1910,32 +2125,6 @@ IconData _forecastIcon(String iconCode) {
     'storm' => Icons.flash_on_rounded,
     _ => Icons.wb_twilight_rounded,
   };
-}
-
-String _forecastTemperatureRange(
-  DailyWeatherForecastDayModel day,
-  String units,
-) {
-  final unit = _temperatureUnit(units);
-  return '${_formatNumber(day.temperatureMin)}$unit - ${_formatNumber(day.temperatureMax)}$unit';
-}
-
-String _forecastRainLabel(DailyWeatherForecastDayModel day) {
-  final parts = <String>[];
-  if (day.precipitationProbabilityMax != null) {
-    parts.add('${_formatNumber(day.precipitationProbabilityMax!)}% rain');
-  }
-  if (day.precipitationSum != null) {
-    parts.add('${_formatNumber(day.precipitationSum!)} mm');
-  }
-  return parts.join(', ');
-}
-
-String _forecastWindLabel(DailyWeatherForecastDayModel day) {
-  if (day.windSpeedMax == 0) {
-    return '';
-  }
-  return 'Wind ${_formatNumber(day.windSpeedMax)} m/s';
 }
 
 String _formatRouteDistance(num meters) {
@@ -1968,16 +2157,26 @@ String _routeSourceLabel(WalkingRouteModel route) {
   return '$provider $mode';
 }
 
-LatLng _midpoint(LatLng start, LatLng end) {
-  return LatLng(
-    (start.latitude + end.latitude) / 2,
-    (start.longitude + end.longitude) / 2,
-  );
+Color _colorFromHex(String hex, {required Color fallback}) {
+  final cleaned = hex.trim().replaceFirst('#', '');
+  if (cleaned.length != 6) {
+    return fallback;
+  }
+  final value = int.tryParse(cleaned, radix: 16);
+  if (value == null) {
+    return fallback;
+  }
+  return Color(0xff000000 | value);
 }
 
-double _initialRouteZoom(LatLng start, LatLng end) {
-  final latDelta = (start.latitude - end.latitude).abs();
-  final lngDelta = (start.longitude - end.longitude).abs();
+double _initialRouteZoom(
+  double startLatitude,
+  double startLongitude,
+  double endLatitude,
+  double endLongitude,
+) {
+  final latDelta = (startLatitude - endLatitude).abs();
+  final lngDelta = (startLongitude - endLongitude).abs();
   final span = latDelta > lngDelta ? latDelta : lngDelta;
   if (span > 1) {
     return 7;

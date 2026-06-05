@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:api_6005cmd/core/api/api_config.dart';
@@ -22,38 +23,65 @@ class ApiClient {
   final String _baseUrl;
 
   Future<Map<String, dynamic>> getJson(String path) async {
-    final response = await _httpClient
-        .get(_uri(path))
-        .timeout(ApiConfig.requestTimeout);
-    return _decodeObject(response);
+    try {
+      final response = await _httpClient
+          .get(_uri(path))
+          .timeout(ApiConfig.requestTimeout);
+      return _decodeObject(response);
+    } on TimeoutException {
+      throw ApiException(0, 'Backend request timed out: ${_uri(path)}');
+    } on http.ClientException catch (error) {
+      throw ApiException(
+        0,
+        'Could not reach backend. Check backend is running and CORS allows this Flutter port. ${error.message}',
+      );
+    }
   }
 
   Future<Map<String, dynamic>> postJson(
     String path,
     Map<String, dynamic> body,
   ) async {
-    final response = await _httpClient
-        .post(
-          _uri(path),
-          headers: const {'Content-Type': 'application/json'},
-          body: jsonEncode(body),
-        )
-        .timeout(ApiConfig.requestTimeout);
-    return _decodeObject(response);
+    try {
+      final response = await _httpClient
+          .post(
+            _uri(path),
+            headers: const {'Content-Type': 'application/json'},
+            body: jsonEncode(body),
+          )
+          .timeout(ApiConfig.requestTimeout);
+      return _decodeObject(response);
+    } on TimeoutException {
+      throw ApiException(0, 'Backend request timed out: ${_uri(path)}');
+    } on http.ClientException catch (error) {
+      throw ApiException(
+        0,
+        'Could not reach backend. Check backend is running and CORS allows this Flutter port. ${error.message}',
+      );
+    }
   }
 
   Future<Map<String, dynamic>> putJson(
     String path,
     Map<String, dynamic> body,
   ) async {
-    final response = await _httpClient
-        .put(
-          _uri(path),
-          headers: const {'Content-Type': 'application/json'},
-          body: jsonEncode(body),
-        )
-        .timeout(ApiConfig.requestTimeout);
-    return _decodeObject(response);
+    try {
+      final response = await _httpClient
+          .put(
+            _uri(path),
+            headers: const {'Content-Type': 'application/json'},
+            body: jsonEncode(body),
+          )
+          .timeout(ApiConfig.requestTimeout);
+      return _decodeObject(response);
+    } on TimeoutException {
+      throw ApiException(0, 'Backend request timed out: ${_uri(path)}');
+    } on http.ClientException catch (error) {
+      throw ApiException(
+        0,
+        'Could not reach backend. Check backend is running and CORS allows this Flutter port. ${error.message}',
+      );
+    }
   }
 
   Uri _uri(String path) {

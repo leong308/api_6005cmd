@@ -1,4 +1,5 @@
 const { getTripById } = require("../data/store");
+const agendaService = require("./agendaService");
 const countryService = require("./countryService");
 const foursquareService = require("./foursquareService");
 const weatherService = require("./weatherService");
@@ -109,6 +110,25 @@ async function generateSummary(tripId, host, scheme, options = {}) {
   const recommendations = recommendationGroups.flatMap(
     (group) => group.recommendations,
   );
+  let tripAgenda;
+  try {
+    tripAgenda = await agendaService.buildTimedTripAgenda({
+      trip,
+      dailyWeatherForecast,
+      recommendationGroups,
+      availabilityDays: options.availabilityDays,
+      routeMapDays: options.routeMapDays,
+    });
+  } catch (err) {
+    console.error(`Graceful partial failure: Timed agenda failed - ${err.message}`);
+    tripAgenda = await agendaService.buildTripAgenda({
+      trip,
+      dailyWeatherForecast,
+      recommendationGroups,
+      availabilityDays: options.availabilityDays,
+      routeMapDays: options.routeMapDays,
+    });
+  }
 
   return {
     trip,
@@ -122,6 +142,8 @@ async function generateSummary(tripId, host, scheme, options = {}) {
       recommendationGroups.map((group) => [group.preference, group.limit]),
     ),
     countryInfo,
+    tripAgenda,
+    agenda: tripAgenda,
   };
 }
 

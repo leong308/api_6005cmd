@@ -1,4 +1,5 @@
 const { HttpError } = require("../lib/http");
+const countryService = require("./countryService");
 
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/reverse";
 const USER_AGENT =
@@ -38,9 +39,11 @@ async function reverseGeocode(latitude, longitude) {
   url.searchParams.set("lon", longitude);
   url.searchParams.set("addressdetails", "1");
   url.searchParams.set("zoom", "5");
+  url.searchParams.set("accept-language", "en");
 
   const response = await fetch(url, {
     headers: {
+      "Accept-Language": "en",
       "User-Agent": USER_AGENT,
       Referer: "http://localhost:3000",
     },
@@ -55,9 +58,13 @@ async function reverseGeocode(latitude, longitude) {
 
   const data = await response.json();
   const address = data.address ?? {};
+  const countryCode = address.country_code
+    ? String(address.country_code).toUpperCase()
+    : "";
+  const englishCountry = await englishCountryName(countryCode, address.country);
   const result = {
-    country: address.country ?? "",
-    countryCode: address.country_code ? String(address.country_code).toUpperCase() : "",
+    country: englishCountry,
+    countryCode,
     displayName: data.display_name ?? "",
     latitude,
     longitude,
@@ -65,6 +72,21 @@ async function reverseGeocode(latitude, longitude) {
 
   cache.set(key, result);
   return result;
+}
+
+async function englishCountryName(countryCode, fallback) {
+  if (!countryCode) {
+    return fallback ?? "";
+  }
+
+  try {
+    return await countryService.fetchCountryNameByCode(countryCode);
+  } catch (error) {
+    console.warn(
+      `Could not normalize country code ${countryCode} to English: ${error.message}`,
+    );
+    return fallback ?? "";
+  }
 }
 
 module.exports = {

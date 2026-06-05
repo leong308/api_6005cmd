@@ -8,6 +8,7 @@ const {
   getTripGooglePlaces,
 } = require("../data/store");
 const { HttpError, assertRequiredFields } = require("../lib/http");
+const agendaService = require("../services/agendaService");
 const countryService = require("../services/countryService");
 const foursquareService = require("../services/foursquareService");
 const weatherService = require("../services/weatherService");
@@ -137,6 +138,58 @@ tripRouter.get("/:id/recommendations", async (req, res, next) => {
   }
 });
 
+tripRouter.get("/:id/agenda", async (req, res, next) => {
+  try {
+    const trip = getTripById(req.params.id);
+    if (!trip) {
+      throw new HttpError(404, "Trip not found.");
+    }
+
+    const limit = parseRecommendationLimit(req.query.limit);
+    const limitsByPreference = parseRecommendationLimits(
+      req.query.recommendationLimits ?? req.query.limits,
+    );
+    const availabilityDays = parseAvailabilityDays(req.query.availabilityDays);
+    const routeMapDays = parseRouteMapDays(req.query.routeMapDays);
+    const [dailyWeatherForecast, recommendationGroups] = await Promise.all([
+      weatherService
+        .fetchDailyForecast(
+          trip.latitude,
+          trip.longitude,
+          trip.startDate,
+          trip.endDate,
+        )
+        .catch(() => null),
+      foursquareService
+        .fetchRecommendationGroups({
+          latitude: trip.latitude,
+          longitude: trip.longitude,
+          preferences: trip.preferences,
+          limit,
+          limitsByPreference,
+        })
+        .catch(() => []),
+    ]);
+
+    const data = await agendaService.buildTimedTripAgenda({
+      trip,
+      dailyWeatherForecast,
+      recommendationGroups,
+      availabilityDays,
+      routeMapDays,
+    });
+
+    return res.json({
+      success: true,
+      provider: "smart-travel-planner",
+      tripId: req.params.id,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 tripRouter.get("/:id/country-info", async (req, res, next) => {
   try {
     const trip = getTripById(req.params.id);
@@ -198,6 +251,22 @@ module.exports = { tripRouter };
 function parseRecommendationLimit(value) {
   const parsed = Number(value);
   return [3, 5, 10].includes(parsed) ? parsed : 5;
+}
+
+function parseRouteMapDays(value) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) {
+    return 1;
+  }
+  return Math.min(Math.max(parsed, 0), 7);
+}
+
+function parseAvailabilityDays(value) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) {
+    return 1;
+  }
+  return Math.min(Math.max(parsed, 0), 7);
 }
 
 function parseRecommendationLimits(value) {

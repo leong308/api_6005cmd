@@ -5,6 +5,9 @@ const GOOGLE_ROUTES_URL =
   "https://routes.googleapis.com/directions/v2:computeRoutes";
 const GOOGLE_ROUTES_FIELD_MASK =
   "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline";
+const GOOGLE_ROUTES_TIMEOUT_MS = Number(
+  process.env.GOOGLE_ROUTES_TIMEOUT_MS || 12000,
+);
 const ROUTE_MODES = {
   walk: {
     mode: "walk",
@@ -39,6 +42,7 @@ async function fetchRoute({
       "X-Goog-Api-Key": readApiKey(),
       "X-Goog-FieldMask": GOOGLE_ROUTES_FIELD_MASK,
     },
+    signal: AbortSignal.timeout(GOOGLE_ROUTES_TIMEOUT_MS),
     body: JSON.stringify(
       buildRouteRequest({
         fromLatitude,

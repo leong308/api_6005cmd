@@ -8,15 +8,17 @@ const FOURSQUARE_PLACES_API_VERSION =
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_RADIUS_METERS = 8000;
 const DEFAULT_LIMIT = 5;
+const FOURSQUARE_TIMEOUT_MS = Number(process.env.FOURSQUARE_TIMEOUT_MS || 10000);
 
 const cache = new Map();
 
-function cacheKey(latitude, longitude, preference, limit) {
+function cacheKey(latitude, longitude, preference, limit, openAt) {
   return [
     latitude.toFixed(4),
     longitude.toFixed(4),
     preference.toLowerCase(),
     limit,
+    openAt || "anytime",
   ].join(",");
 }
 
@@ -48,6 +50,7 @@ async function fetchRecommendations({
   longitude,
   preference = "family",
   limit = DEFAULT_LIMIT,
+  openAt = "",
 }) {
   validateCoordinates(latitude, longitude);
 
@@ -58,6 +61,7 @@ async function fetchRecommendations({
     longitude,
     normalizedPreference,
     normalizedLimit,
+    normalizeOpenAt(openAt),
   );
   const cached = cache.get(key);
   if (cached && cached.expiresAt > Date.now()) {
@@ -71,6 +75,7 @@ async function fetchRecommendations({
     longitude,
     preference: normalizedPreference,
     limit: normalizedLimit,
+    openAt: normalizeOpenAt(openAt),
     authMode: process.env.FOURSQUARE_AUTH_SCHEME?.toLowerCase(),
   });
   if (
@@ -83,6 +88,7 @@ async function fetchRecommendations({
       longitude,
       preference: normalizedPreference,
       limit: normalizedLimit,
+      openAt: normalizeOpenAt(openAt),
       authMode: "raw",
     });
   }
@@ -94,7 +100,9 @@ async function fetchRecommendations({
   }
 
   const results = Array.isArray(body.results) ? body.results : [];
-  const data = results.map(mapPlaceToRecommendation);
+  const data = results.map((place) =>
+    mapPlaceToRecommendation(place, { openAt: normalizeOpenAt(openAt) }),
+  );
 
   cache.set(key, {
     data,
@@ -141,6 +149,7 @@ async function requestFoursquare({
   longitude,
   preference,
   limit,
+  openAt,
   authMode,
 }) {
   const url = new URL(FOURSQUARE_SEARCH_URL);
@@ -149,6 +158,9 @@ async function requestFoursquare({
   url.searchParams.set("radius", DEFAULT_RADIUS_METERS);
   url.searchParams.set("limit", limit);
   url.searchParams.set("sort", "distance");
+  if (openAt) {
+    url.searchParams.set("open_at", openAt);
+  }
   url.searchParams.set(
     "fields",
     [
@@ -159,6 +171,8 @@ async function requestFoursquare({
       "latitude",
       "longitude",
       "location",
+      "hours",
+      "hours_popular",
       "link",
       "website",
     ].join(","),
@@ -170,6 +184,7 @@ async function requestFoursquare({
       Authorization: authHeaderValue(apiKey, authMode),
       "X-places-api-version": FOURSQUARE_PLACES_API_VERSION,
     },
+    signal: AbortSignal.timeout(FOURSQUARE_TIMEOUT_MS),
   });
 }
 
@@ -199,7 +214,7 @@ function extractErrorMessage(body, status) {
   return `Foursquare returned status ${status}.`;
 }
 
-function mapPlaceToRecommendation(place) {
+function mapPlaceToRecommendation(place, { openAt = "" } = {}) {
   const category = Array.isArray(place.categories)
     ? place.categories[0]?.name ?? "recommendation"
     : "recommendation";
@@ -221,6 +236,15 @@ function mapPlaceToRecommendation(place) {
     link: place.link ?? "",
     website: place.website ?? "",
     source: "foursquare",
+    hours: place.hours ?? null,
+    popularHours: place.hours_popular ?? null,
+    availability: {
+      openAt,
+      verifiedForVisitTime: openAt.length > 0,
+      source: openAt.length > 0
+        ? "foursquare-open_at-filter"
+        : "foursquare-search",
+    },
   };
 }
 
@@ -245,6 +269,11 @@ function addressLabel(location) {
 function normalizePreference(value) {
   const text = String(value ?? "").trim().toLowerCase();
   return text.length === 0 ? "family" : text;
+}
+
+function normalizeOpenAt(value) {
+  const text = String(value ?? "").trim().toUpperCase();
+  return /^[1-7]T[0-2][0-9][0-5][0-9]$/.test(text) ? text : "";
 }
 
 function normalizePreferences(values) {

@@ -390,6 +390,427 @@ class CountryInfoModel {
   }
 }
 
+class TripAgendaModel {
+  const TripAgendaModel({
+    required this.title,
+    required this.generatedAt,
+    required this.tripDays,
+    required this.pattern,
+    required this.source,
+    required this.days,
+    required this.checklist,
+  });
+
+  final String title;
+  final String generatedAt;
+  final int tripDays;
+  final String pattern;
+  final Map<String, String> source;
+  final List<TripAgendaDayModel> days;
+  final List<String> checklist;
+
+  factory TripAgendaModel.fromJson(Map<String, dynamic>? json) {
+    if (json == null) {
+      return const TripAgendaModel(
+        title: 'Weather-aware tour guide',
+        generatedAt: '',
+        tripDays: 0,
+        pattern: '',
+        source: {},
+        days: [],
+        checklist: [],
+      );
+    }
+
+    return TripAgendaModel(
+      title: _asString(json['title'], fallback: 'Weather-aware tour guide'),
+      generatedAt: _asString(json['generatedAt']),
+      tripDays: _asInt(json['tripDays']),
+      pattern: _asString(json['pattern']),
+      source: _asStringMap(json['source']),
+      days: _asModelList(json['days'], TripAgendaDayModel.fromJson),
+      checklist: _asStringList(json['checklist']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'title': title,
+      'generatedAt': generatedAt,
+      'tripDays': tripDays,
+      'pattern': pattern,
+      'source': source,
+      'days': days.map((day) => day.toJson()).toList(),
+      'checklist': checklist,
+    };
+  }
+}
+
+class TripAgendaDayModel {
+  const TripAgendaDayModel({
+    required this.date,
+    required this.label,
+    required this.theme,
+    required this.weatherNote,
+    required this.items,
+    required this.routeMap,
+    this.weather,
+  });
+
+  final String date;
+  final String label;
+  final String theme;
+  final String weatherNote;
+  final Map<String, dynamic>? weather;
+  final List<TripAgendaItemModel> items;
+  final AgendaRouteMapModel routeMap;
+
+  factory TripAgendaDayModel.fromJson(Map<String, dynamic> json) {
+    return TripAgendaDayModel(
+      date: _asString(json['date']),
+      label: _asString(json['label']),
+      theme: _asString(json['theme'], fallback: 'Local discovery'),
+      weatherNote: _asString(json['weatherNote']),
+      weather: _asNullableMap(json['weather']),
+      items: _asModelList(json['items'], TripAgendaItemModel.fromJson),
+      routeMap: AgendaRouteMapModel.fromJson(_asNullableMap(json['routeMap'])),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'date': date,
+      'label': label,
+      'theme': theme,
+      'weatherNote': weatherNote,
+      'weather': weather,
+      'items': items.map((item) => item.toJson()).toList(),
+      'routeMap': routeMap.toJson(),
+    };
+  }
+}
+
+class AgendaRouteMapModel {
+  const AgendaRouteMapModel({
+    required this.mode,
+    required this.modeLabel,
+    required this.provider,
+    required this.routeAvailable,
+    required this.totalDistanceMeters,
+    required this.totalDurationSeconds,
+    required this.legCount,
+    required this.stopCount,
+    required this.markers,
+    required this.legs,
+    required this.message,
+  });
+
+  final String mode;
+  final String modeLabel;
+  final String provider;
+  final bool routeAvailable;
+  final num totalDistanceMeters;
+  final int totalDurationSeconds;
+  final int legCount;
+  final int stopCount;
+  final List<AgendaRouteMarkerModel> markers;
+  final List<AgendaRouteLegModel> legs;
+  final String message;
+
+  factory AgendaRouteMapModel.fromJson(Map<String, dynamic>? json) {
+    if (json == null) {
+      return const AgendaRouteMapModel(
+        mode: 'walk',
+        modeLabel: 'Walk',
+        provider: 'unavailable',
+        routeAvailable: false,
+        totalDistanceMeters: 0,
+        totalDurationSeconds: 0,
+        legCount: 0,
+        stopCount: 0,
+        markers: [],
+        legs: [],
+        message: '',
+      );
+    }
+
+    return AgendaRouteMapModel(
+      mode: _asString(json['mode'], fallback: 'walk'),
+      modeLabel: _asString(json['modeLabel'], fallback: 'Walk'),
+      provider: _asString(json['provider'], fallback: 'unavailable'),
+      routeAvailable: _asBool(json['routeAvailable']),
+      totalDistanceMeters: _asNum(json['totalDistanceMeters']),
+      totalDurationSeconds: _asInt(json['totalDurationSeconds']),
+      legCount: _asInt(json['legCount']),
+      stopCount: _asInt(json['stopCount']),
+      markers: _asModelList(json['markers'], AgendaRouteMarkerModel.fromJson),
+      legs: _asModelList(json['legs'], AgendaRouteLegModel.fromJson),
+      message: _asString(json['message']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'mode': mode,
+      'modeLabel': modeLabel,
+      'provider': provider,
+      'routeAvailable': routeAvailable,
+      'totalDistanceMeters': totalDistanceMeters,
+      'totalDurationSeconds': totalDurationSeconds,
+      'legCount': legCount,
+      'stopCount': stopCount,
+      'markers': markers.map((marker) => marker.toJson()).toList(),
+      'legs': legs.map((leg) => leg.toJson()).toList(),
+      'message': message,
+    };
+  }
+}
+
+class AgendaRouteMarkerModel {
+  const AgendaRouteMarkerModel({
+    required this.label,
+    required this.title,
+    required this.kind,
+    required this.timeOfDay,
+    required this.color,
+    this.latitude,
+    this.longitude,
+  });
+
+  final String label;
+  final String title;
+  final String kind;
+  final String timeOfDay;
+  final String color;
+  final double? latitude;
+  final double? longitude;
+
+  factory AgendaRouteMarkerModel.fromJson(Map<String, dynamic> json) {
+    final coordinates = _asNullableMap(json['coordinates']);
+    return AgendaRouteMarkerModel(
+      label: _asString(json['label']),
+      title: _asString(json['title']),
+      kind: _asString(json['kind']),
+      timeOfDay: _asString(json['timeOfDay']),
+      color: _asString(json['color']),
+      latitude: _asNullableDouble(coordinates?['latitude']),
+      longitude: _asNullableDouble(coordinates?['longitude']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'label': label,
+      'title': title,
+      'kind': kind,
+      'timeOfDay': timeOfDay,
+      'color': color,
+      'coordinates': {'latitude': latitude, 'longitude': longitude},
+    };
+  }
+}
+
+class AgendaRouteLegModel {
+  const AgendaRouteLegModel({
+    required this.legNumber,
+    required this.label,
+    required this.fromTitle,
+    required this.toTitle,
+    required this.color,
+    required this.provider,
+    required this.mode,
+    required this.modeLabel,
+    required this.travelMode,
+    required this.routeAvailable,
+    required this.distanceMeters,
+    required this.durationSeconds,
+    required this.path,
+    required this.unavailableReason,
+  });
+
+  final int legNumber;
+  final String label;
+  final String fromTitle;
+  final String toTitle;
+  final String color;
+  final String provider;
+  final String mode;
+  final String modeLabel;
+  final String travelMode;
+  final bool routeAvailable;
+  final num distanceMeters;
+  final int durationSeconds;
+  final List<RoutePointModel> path;
+  final String unavailableReason;
+
+  factory AgendaRouteLegModel.fromJson(Map<String, dynamic> json) {
+    return AgendaRouteLegModel(
+      legNumber: _asInt(json['legNumber']),
+      label: _asString(json['label']),
+      fromTitle: _asString(json['fromTitle']),
+      toTitle: _asString(json['toTitle']),
+      color: _asString(json['color']),
+      provider: _asString(json['provider']),
+      mode: _asString(json['mode']),
+      modeLabel: _asString(json['modeLabel']),
+      travelMode: _asString(json['travelMode']),
+      routeAvailable: _asBool(json['routeAvailable']),
+      distanceMeters: _asNum(json['distanceMeters']),
+      durationSeconds: _asInt(json['durationSeconds']),
+      path: _asModelList(json['path'], RoutePointModel.fromJson),
+      unavailableReason: _asString(json['unavailableReason']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'legNumber': legNumber,
+      'label': label,
+      'fromTitle': fromTitle,
+      'toTitle': toTitle,
+      'color': color,
+      'provider': provider,
+      'mode': mode,
+      'modeLabel': modeLabel,
+      'travelMode': travelMode,
+      'routeAvailable': routeAvailable,
+      'distanceMeters': distanceMeters,
+      'durationSeconds': durationSeconds,
+      'path': path
+          .map(
+            (point) => {
+              'latitude': point.latitude,
+              'longitude': point.longitude,
+            },
+          )
+          .toList(),
+      'unavailableReason': unavailableReason,
+    };
+  }
+}
+
+class TripAgendaItemModel {
+  const TripAgendaItemModel({
+    required this.slot,
+    required this.kind,
+    required this.timeOfDay,
+    required this.startTime,
+    required this.endTime,
+    required this.visitWindow,
+    required this.title,
+    required this.category,
+    required this.preference,
+    required this.description,
+    required this.address,
+    required this.distanceMeters,
+    required this.availability,
+    this.latitude,
+    this.longitude,
+  });
+
+  final String slot;
+  final String kind;
+  final String timeOfDay;
+  final String startTime;
+  final String endTime;
+  final String visitWindow;
+  final String title;
+  final String category;
+  final String preference;
+  final String description;
+  final String address;
+  final int distanceMeters;
+  final AgendaAvailabilityModel availability;
+  final double? latitude;
+  final double? longitude;
+
+  factory TripAgendaItemModel.fromJson(Map<String, dynamic> json) {
+    final coordinates = _asNullableMap(json['coordinates']);
+    return TripAgendaItemModel(
+      slot: _asString(json['slot']),
+      kind: _asString(json['kind']),
+      timeOfDay: _asString(json['timeOfDay']),
+      startTime: _asString(json['startTime']),
+      endTime: _asString(json['endTime']),
+      visitWindow: _asString(json['visitWindow']),
+      title: _asString(json['title'], fallback: 'Trip stop'),
+      category: _asString(json['category']),
+      preference: _asString(json['preference']),
+      description: _asString(json['description']),
+      address: _asString(json['address']),
+      distanceMeters: _asInt(json['distanceMeters']),
+      availability: AgendaAvailabilityModel.fromJson(
+        _asNullableMap(json['availability']),
+      ),
+      latitude: _asNullableDouble(coordinates?['latitude']),
+      longitude: _asNullableDouble(coordinates?['longitude']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'timeOfDay': timeOfDay,
+      'slot': slot,
+      'kind': kind,
+      'startTime': startTime,
+      'endTime': endTime,
+      'visitWindow': visitWindow,
+      'title': title,
+      'category': category,
+      'preference': preference,
+      'description': description,
+      'address': address,
+      'distanceMeters': distanceMeters,
+      'availability': availability.toJson(),
+      'coordinates': {'latitude': latitude, 'longitude': longitude},
+    };
+  }
+}
+
+class AgendaAvailabilityModel {
+  const AgendaAvailabilityModel({
+    required this.openAt,
+    required this.verifiedForVisitTime,
+    required this.label,
+    required this.source,
+  });
+
+  final String openAt;
+  final bool verifiedForVisitTime;
+  final String label;
+  final String source;
+
+  factory AgendaAvailabilityModel.fromJson(Map<String, dynamic>? json) {
+    if (json == null) {
+      return const AgendaAvailabilityModel(
+        openAt: '',
+        verifiedForVisitTime: false,
+        label: 'Opening-time status unavailable.',
+        source: 'unavailable',
+      );
+    }
+
+    return AgendaAvailabilityModel(
+      openAt: _asString(json['openAt']),
+      verifiedForVisitTime: _asBool(json['verifiedForVisitTime']),
+      label: _asString(
+        json['label'],
+        fallback: 'Opening-time status unavailable.',
+      ),
+      source: _asString(json['source']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'openAt': openAt,
+      'verifiedForVisitTime': verifiedForVisitTime,
+      'label': label,
+      'source': source,
+    };
+  }
+}
+
 class TripSummaryModel {
   const TripSummaryModel({
     required this.trip,
@@ -401,6 +822,7 @@ class TripSummaryModel {
     required this.recommendationLimit,
     required this.recommendationLimits,
     required this.countryInfo,
+    required this.tripAgenda,
   });
 
   final TripListItemModel trip;
@@ -412,6 +834,7 @@ class TripSummaryModel {
   final int recommendationLimit;
   final Map<String, int> recommendationLimits;
   final CountryInfoModel countryInfo;
+  final TripAgendaModel tripAgenda;
 
   factory TripSummaryModel.fromJson(Map<String, dynamic> json) {
     final trip = TripListItemModel.fromJson(_asMap(json['trip']));
@@ -443,6 +866,9 @@ class TripSummaryModel {
       countryInfo: CountryInfoModel.fromJson(
         _asNullableMap(json['countryInfo']),
       ),
+      tripAgenda: TripAgendaModel.fromJson(
+        _asNullableMap(json['tripAgenda'] ?? json['agenda']),
+      ),
     );
   }
 
@@ -461,6 +887,7 @@ class TripSummaryModel {
       'recommendationLimit': recommendationLimit,
       'recommendationLimits': recommendationLimits,
       'countryInfo': countryInfo.toJson(),
+      'tripAgenda': tripAgenda.toJson(),
     };
   }
 }
@@ -577,6 +1004,15 @@ Map<String, int> _asRecommendationLimits(Object? value) {
   );
 }
 
+Map<String, String> _asStringMap(Object? value) {
+  final map = _asNullableMap(value);
+  if (map == null) {
+    return const {};
+  }
+
+  return map.map((key, item) => MapEntry(key.toString(), item.toString()));
+}
+
 int? _asNullableInt(Object? value) {
   if (value == null) {
     return null;
@@ -588,6 +1024,14 @@ int? _asNullableInt(Object? value) {
     return value.round();
   }
   return int.tryParse(value.toString());
+}
+
+bool _asBool(Object? value) {
+  if (value is bool) {
+    return value;
+  }
+  final text = value?.toString().toLowerCase();
+  return text == 'true' || text == '1' || text == 'yes';
 }
 
 String _coordinatesLabel(Object? value) {

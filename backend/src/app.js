@@ -9,7 +9,7 @@ function createApp() {
 
   app.use(
     cors({
-      origin: env.corsOrigin,
+      origin: resolveCorsOrigin,
       credentials: true,
     }),
   );
@@ -27,6 +27,35 @@ function createApp() {
   app.use("/api", apiRouter);
 
   return app;
+}
+
+function resolveCorsOrigin(origin, callback) {
+  if (!origin || env.corsOrigin === true) {
+    return callback(null, true);
+  }
+
+  if (Array.isArray(env.corsOrigin) && env.corsOrigin.includes(origin)) {
+    return callback(null, true);
+  }
+
+  if (isLocalDevelopmentOrigin(origin)) {
+    return callback(null, true);
+  }
+
+  return callback(new Error(`CORS origin is not allowed: ${origin}`), false);
+}
+
+function isLocalDevelopmentOrigin(origin) {
+  try {
+    const url = new URL(origin);
+    const hostname = url.hostname.toLowerCase();
+    return (
+      ["localhost", "127.0.0.1", "::1"].includes(hostname) &&
+      ["http:", "https:"].includes(url.protocol)
+    );
+  } catch (_error) {
+    return false;
+  }
 }
 
 module.exports = { createApp };

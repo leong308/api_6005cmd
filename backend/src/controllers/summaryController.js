@@ -14,12 +14,19 @@ async function getTripSummary(req, res, next) {
     const recommendationLimits = parseRecommendationLimits(
       req.query.recommendationLimits,
     );
+    const routeMapDays = parseRouteMapDays(req.query.routeMapDays);
+    const availabilityDays = parseAvailabilityDays(req.query.availabilityDays);
 
     const summaryData = await summaryService.generateSummary(
       tripId,
       host,
       scheme,
-      { recommendationLimit, recommendationLimits },
+      {
+        recommendationLimit,
+        recommendationLimits,
+        routeMapDays,
+        availabilityDays,
+      },
     );
 
     return res.status(200).json({
@@ -58,6 +65,22 @@ function parseRecommendationLimits(value) {
       }
       return { ...limits, [preference]: limit };
     }, {});
+}
+
+function parseRouteMapDays(value) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) {
+    return 1;
+  }
+  return Math.min(Math.max(parsed, 0), 7);
+}
+
+function parseAvailabilityDays(value) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) {
+    return 1;
+  }
+  return Math.min(Math.max(parsed, 0), 7);
 }
 
 module.exports = {

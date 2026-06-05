@@ -1,7 +1,6 @@
 import 'package:api_6005cmd/app/theme/app_palette.dart';
+import 'package:api_6005cmd/shared/view/free_vector_map.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
 
 class OsmCoordinatePicker extends StatelessWidget {
   const OsmCoordinatePicker({
@@ -19,7 +18,6 @@ class OsmCoordinatePicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final center = LatLng(latitude, longitude);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -42,54 +40,32 @@ class OsmCoordinatePicker extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'Tap on map to pin exact location.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppPalette.inkA(0.62),
-              ),
+          'Tap on the OpenFreeMap vector map to pin the exact location.',
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.62)),
         ),
         const SizedBox(height: 8),
         ClipRRect(
           borderRadius: BorderRadius.circular(14),
           child: SizedBox(
             height: height,
-            child: FlutterMap(
+            child: FreeVectorMap(
               key: ValueKey(
                 '${latitude.toStringAsFixed(5)},${longitude.toStringAsFixed(5)}',
               ),
-              options: MapOptions(
-                initialCenter: center,
-                initialZoom: 12,
-                minZoom: 2,
-                maxZoom: 18,
-                interactionOptions: const InteractionOptions(
-                  flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-                ),
-                onTap: (_, point) {
-                  onCoordinateSelected(point.latitude, point.longitude);
-                },
-              ),
-              children: [
-                TileLayer(
-                  urlTemplate:
-                      'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-                  subdomains: const ['a', 'b', 'c', 'd'],
-                  userAgentPackageName: 'com.api_6005cmd.app',
-                ),
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: center,
-                      width: 44,
-                      height: 44,
-                      child: Icon(
-                        Icons.location_on_rounded,
-                        color: AppPalette.coral,
-                        size: 36,
-                      ),
-                    ),
-                  ],
+              centerLatitude: latitude,
+              centerLongitude: longitude,
+              initialZoom: 16,
+              markers: [
+                FreeVectorMapPoint(
+                  latitude: latitude,
+                  longitude: longitude,
+                  color: AppPalette.coral,
+                  radius: 9,
                 ),
               ],
+              onTap: onCoordinateSelected,
             ),
           ),
         ),
@@ -97,10 +73,10 @@ class OsmCoordinatePicker extends StatelessWidget {
         Align(
           alignment: Alignment.centerRight,
           child: Text(
-            'Map data © OpenStreetMap contributors © CARTO',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppPalette.inkA(0.55),
-                ),
+            FreeVectorMap.attribution,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.55)),
           ),
         ),
       ],
@@ -109,10 +85,7 @@ class OsmCoordinatePicker extends StatelessWidget {
 }
 
 class _CoordinateValue extends StatelessWidget {
-  const _CoordinateValue({
-    required this.label,
-    required this.value,
-  });
+  const _CoordinateValue({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -131,15 +104,12 @@ class _CoordinateValue extends StatelessWidget {
         children: [
           Text(
             label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppPalette.inkA(0.62),
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.62)),
           ),
           const SizedBox(height: 2),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
+          Text(value, style: Theme.of(context).textTheme.titleMedium),
         ],
       ),
     );

@@ -35,6 +35,7 @@ This matches `lib/core/api/api_config.dart`.
 - `GET /api/trips/:id/weather/forecast`
 - `GET /api/trips/:id/google-places`
 - `GET /api/trips/:id/recommendations`
+- `GET /api/trips/:id/agenda`
 - `GET /api/trips/:id/country-info`
 - `GET /api/trips/:id/summary`
 - `POST /api/auth/register`
@@ -55,5 +56,7 @@ This matches `lib/core/api/api_config.dart`.
 - Auth uses bcrypt password hashes and JWT bearer tokens.
 - `GET /api/external/weather`, `GET /api/external/weather/forecast`, `GET /api/trips/:id/weather`, and `GET /api/trips/:id/weather/forecast` use live Open-Meteo data and do not require an API key.
 - `GET /api/external/recommendations` and `GET /api/trips/:id/recommendations` use live Foursquare Places data when `FOURSQUARE_API_KEY` is configured in `backend/.env`.
+- `GET /api/trips/:id/agenda` builds a timed food/place tour-guide agenda from trip dates, Open-Meteo forecast, Foursquare recommendation groups, Foursquare `open_at` checks, and Google Routes walking paths. Use `availabilityDays=1..7` and `routeMapDays=1..7` to increase live open-at and route-map coverage for demos.
 - `GET /api/external/route` uses Google Maps Routes API when `GOOGLE_ROUTES_API_KEY` is configured in `backend/.env`. Pass `mode=walk` for walking routes or `mode=car` / `mode=vehicle` for Vehicle routes. Vehicle uses Google Routes `DRIVE`.
+- Local development CORS allows configured origins plus any `localhost`, `127.0.0.1`, or `::1` HTTP/HTTPS port, so Flutter web can run on random debug ports.
 - Google Places endpoints are provider-ready stubs returning deterministic payloads.
