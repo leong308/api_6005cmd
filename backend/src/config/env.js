@@ -1,3 +1,10 @@
+/**
+ * Environment configuration loader.
+ *
+ * This file reads optional values from `backend/.env`, keeps existing deployed
+ * environment variables untouched, and exposes normalized backend settings such
+ * as the HTTP port and allowed CORS origins.
+ */
 const fs = require("fs");
 const path = require("path");
 

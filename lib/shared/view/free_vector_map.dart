@@ -4,12 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart' as ml;
 
 class FreeVectorMapPoint {
-  const FreeVectorMapPoint({
-    required this.latitude,
-    required this.longitude,
-    this.color = AppPalette.coral,
-    this.radius = 8,
-  });
+  const FreeVectorMapPoint({required this.latitude, required this.longitude, this.color = AppPalette.coral, this.radius = 8});
 
   final double latitude;
   final double longitude;
@@ -18,12 +13,7 @@ class FreeVectorMapPoint {
 }
 
 class FreeVectorMapRoute {
-  const FreeVectorMapRoute({
-    required this.points,
-    this.color = AppPalette.blue,
-    this.width = 5,
-    this.opacity = 0.95,
-  });
+  const FreeVectorMapRoute({required this.points, this.color = AppPalette.blue, this.width = 5, this.opacity = 0.95});
 
   final List<FreeVectorMapPoint> points;
   final Color color;
@@ -46,8 +36,7 @@ class FreeVectorMap extends StatefulWidget {
     this.onTap,
   });
 
-  static const attribution =
-      'OpenFreeMap | OpenMapTiles | OpenStreetMap contributors';
+  static const attribution = 'OpenFreeMap | OpenMapTiles | OpenStreetMap contributors';
 
   final double centerLatitude;
   final double centerLongitude;
@@ -95,14 +84,8 @@ class _FreeVectorMapState extends State<FreeVectorMap> {
           ml.MapLibreMap(
             key: ValueKey(_style.url),
             styleString: _style.url,
-            initialCameraPosition: ml.CameraPosition(
-              target: ml.LatLng(widget.centerLatitude, widget.centerLongitude),
-              zoom: widget.initialZoom,
-            ),
-            minMaxZoomPreference: ml.MinMaxZoomPreference(
-              widget.minZoom,
-              widget.maxZoom,
-            ),
+            initialCameraPosition: ml.CameraPosition(target: ml.LatLng(widget.centerLatitude, widget.centerLongitude), zoom: widget.initialZoom),
+            minMaxZoomPreference: ml.MinMaxZoomPreference(widget.minZoom, widget.maxZoom),
             rotateGesturesEnabled: false,
             tiltGesturesEnabled: false,
             doubleClickZoomEnabled: true,
@@ -125,12 +108,7 @@ class _FreeVectorMapState extends State<FreeVectorMap> {
                 _fitToBounds();
               }
             },
-            onMapClick: widget.onTap == null
-                ? null
-                : (_, coordinates) => widget.onTap!(
-                    coordinates.latitude,
-                    coordinates.longitude,
-                  ),
+            onMapClick: widget.onTap == null ? null : (_, coordinates) => widget.onTap!(coordinates.latitude, coordinates.longitude),
           ),
           Positioned(
             top: 10,
@@ -142,27 +120,6 @@ class _FreeVectorMapState extends State<FreeVectorMap> {
               onFit: widget.fitToBounds ? _fitToBounds : _moveToCenter,
               onStyle: _cycleStyle,
               styleLabel: _style.label,
-            ),
-          ),
-          Positioned(
-            left: 10,
-            bottom: 10,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: AppPalette.whiteA(0.86),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppPalette.inkA(0.12)),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                child: Text(
-                  'OpenFreeMap vector map',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppPalette.inkA(0.66),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
             ),
           ),
         ],
@@ -218,10 +175,7 @@ class _FreeVectorMapState extends State<FreeVectorMap> {
       return;
     }
     await controller.animateCamera(
-      ml.CameraUpdate.newLatLngZoom(
-        ml.LatLng(widget.centerLatitude, widget.centerLongitude),
-        widget.initialZoom,
-      ),
+      ml.CameraUpdate.newLatLngZoom(ml.LatLng(widget.centerLatitude, widget.centerLongitude), widget.initialZoom),
       duration: const Duration(milliseconds: 260),
     );
   }
@@ -231,31 +185,19 @@ class _FreeVectorMapState extends State<FreeVectorMap> {
     if (controller == null) {
       return;
     }
-    final points = [
-      ..._mapRoutes(widget).expand((route) => route.points),
-      ...widget.markers,
-    ];
+    final points = [..._mapRoutes(widget).expand((route) => route.points), ...widget.markers];
     if (points.isEmpty) {
       await _moveToCenter();
       return;
     }
     if (points.length == 1) {
-      await controller.animateCamera(
-        ml.CameraUpdate.newLatLngZoom(_toMapLibrePoint(points.first), 18),
-        duration: const Duration(milliseconds: 260),
-      );
+      await controller.animateCamera(ml.CameraUpdate.newLatLngZoom(_toMapLibrePoint(points.first), 18), duration: const Duration(milliseconds: 260));
       return;
     }
 
     final bounds = _boundsFor(points);
     await controller.animateCamera(
-      ml.CameraUpdate.newLatLngBounds(
-        bounds,
-        left: 42,
-        top: 42,
-        right: 42,
-        bottom: 42,
-      ),
+      ml.CameraUpdate.newLatLngBounds(bounds, left: 42, top: 42, right: 42, bottom: 42),
       duration: const Duration(milliseconds: 260),
     );
   }
@@ -265,10 +207,7 @@ class _FreeVectorMapState extends State<FreeVectorMap> {
     if (controller == null) {
       return;
     }
-    await controller.animateCamera(
-      ml.CameraUpdate.zoomBy(amount),
-      duration: const Duration(milliseconds: 180),
-    );
+    await controller.animateCamera(ml.CameraUpdate.zoomBy(amount), duration: const Duration(milliseconds: 180));
   }
 
   void _cycleStyle() {
@@ -307,33 +246,13 @@ class _MapZoomControls extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _MapControlButton(
-            tooltip: 'Zoom in',
-            icon: Icons.add_rounded,
-            enabled: enabled,
-            onPressed: onZoomIn,
-          ),
+          _MapControlButton(tooltip: 'Zoom in', icon: Icons.add_rounded, enabled: enabled, onPressed: onZoomIn),
           _MapControlDivider(),
-          _MapControlButton(
-            tooltip: 'Zoom out',
-            icon: Icons.remove_rounded,
-            enabled: enabled,
-            onPressed: onZoomOut,
-          ),
+          _MapControlButton(tooltip: 'Zoom out', icon: Icons.remove_rounded, enabled: enabled, onPressed: onZoomOut),
           _MapControlDivider(),
-          _MapControlButton(
-            tooltip: 'Fit map',
-            icon: Icons.center_focus_strong_rounded,
-            enabled: enabled,
-            onPressed: onFit,
-          ),
+          _MapControlButton(tooltip: 'Fit map', icon: Icons.center_focus_strong_rounded, enabled: enabled, onPressed: onFit),
           _MapControlDivider(),
-          _MapControlButton(
-            tooltip: 'Switch map style: $styleLabel',
-            icon: Icons.layers_rounded,
-            enabled: enabled,
-            onPressed: onStyle,
-          ),
+          _MapControlButton(tooltip: 'Switch map style: $styleLabel', icon: Icons.layers_rounded, enabled: enabled, onPressed: onStyle),
         ],
       ),
     );
@@ -341,12 +260,7 @@ class _MapZoomControls extends StatelessWidget {
 }
 
 class _MapControlButton extends StatelessWidget {
-  const _MapControlButton({
-    required this.tooltip,
-    required this.icon,
-    required this.enabled,
-    required this.onPressed,
-  });
+  const _MapControlButton({required this.tooltip, required this.icon, required this.enabled, required this.onPressed});
 
   final String tooltip;
   final IconData icon;
@@ -372,10 +286,7 @@ class _MapControlButton extends StatelessWidget {
 class _MapControlDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 22,
-      child: VerticalDivider(width: 1, color: AppPalette.inkA(0.12)),
-    );
+    return SizedBox(height: 22, child: VerticalDivider(width: 1, color: AppPalette.inkA(0.12)));
   }
 }
 
@@ -400,11 +311,7 @@ ml.LatLng _toMapLibrePoint(FreeVectorMapPoint point) {
 }
 
 List<FreeVectorMapRoute> _mapRoutes(FreeVectorMap widget) {
-  return [
-    if (widget.route.isNotEmpty)
-      FreeVectorMapRoute(points: widget.route, color: AppPalette.blue),
-    ...widget.routes,
-  ];
+  return [if (widget.route.isNotEmpty) FreeVectorMapRoute(points: widget.route, color: AppPalette.blue), ...widget.routes];
 }
 
 ml.LatLngBounds _boundsFor(List<FreeVectorMapPoint> points) {
@@ -420,10 +327,7 @@ ml.LatLngBounds _boundsFor(List<FreeVectorMapPoint> points) {
     maxLng = point.longitude > maxLng ? point.longitude : maxLng;
   }
 
-  return ml.LatLngBounds(
-    southwest: ml.LatLng(minLat, minLng),
-    northeast: ml.LatLng(maxLat, maxLng),
-  );
+  return ml.LatLngBounds(southwest: ml.LatLng(minLat, minLng), northeast: ml.LatLng(maxLat, maxLng));
 }
 
 String _hexColor(Color color) {
@@ -433,10 +337,7 @@ String _hexColor(Color color) {
 
 String _mapSignature(FreeVectorMap widget) {
   final markerSignature = widget.markers
-      .map(
-        (point) =>
-            '${point.latitude.toStringAsFixed(6)},${point.longitude.toStringAsFixed(6)},${point.radius}',
-      )
+      .map((point) => '${point.latitude.toStringAsFixed(6)},${point.longitude.toStringAsFixed(6)},${point.radius}')
       .join('|');
   final routeSignature = _mapRoutes(widget)
       .map(
@@ -444,12 +345,7 @@ String _mapSignature(FreeVectorMap widget) {
           route.color.toARGB32(),
           route.width.toStringAsFixed(2),
           route.opacity.toStringAsFixed(2),
-          route.points
-              .map(
-                (point) =>
-                    '${point.latitude.toStringAsFixed(6)},${point.longitude.toStringAsFixed(6)}',
-              )
-              .join(','),
+          route.points.map((point) => '${point.latitude.toStringAsFixed(6)},${point.longitude.toStringAsFixed(6)}').join(','),
         ].join(':'),
       )
       .join('|');

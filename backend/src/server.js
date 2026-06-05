@@ -1,3 +1,10 @@
+/**
+ * Backend startup entry point.
+ *
+ * This file creates the Express app, attaches final not-found/error middleware,
+ * and starts listening on the configured port. This is the file run by
+ * `npm start` or `npm run dev`.
+ */
 const { createApp } = require("./app");
 const { env } = require("./config/env");
 const { globalErrorHandler } = require("./middleware/errorHandler");

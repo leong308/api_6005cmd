@@ -5,7 +5,6 @@ import 'package:api_6005cmd/features/add_trip/data/add_trip_form_data.dart';
 import 'package:api_6005cmd/features/edit_trip/data/edit_trip_data_source.dart';
 import 'package:api_6005cmd/features/edit_trip/model/edit_trip_model.dart';
 import 'package:api_6005cmd/features/trip_list/data/trip_list_data_source.dart';
-import 'package:api_6005cmd/shared/view/layer_badges.dart';
 import 'package:api_6005cmd/shared/view/mac_panel.dart';
 import 'package:api_6005cmd/shared/view/osm_coordinate_picker.dart';
 import 'package:api_6005cmd/shared/view/section_header.dart';
@@ -221,19 +220,11 @@ class _EditTripFormState extends State<_EditTripForm> {
       children: [
         SectionHeader(
           title: 'Edit Trip',
-          subtitle:
-              'Update selected record ${widget.model.id} through PUT /api/trips/:id.',
           trailing: FilledButton.tonalIcon(
             onPressed: widget.onRefresh,
             icon: const Icon(Icons.refresh_rounded),
             label: const Text('Reload Record'),
           ),
-        ),
-        const SizedBox(height: 12),
-        const LayerBadges(
-          dataLayer: 'EditTripDataSource',
-          modelLayer: 'EditTripModel',
-          viewLayer: 'EditTripPage',
         ),
         const SizedBox(height: 12),
         _EditReadiness(

@@ -1,3 +1,10 @@
+/**
+ * Google Routes service.
+ *
+ * This file calls Google Routes API for walking/driving paths, maps the provider
+ * response into app-friendly route data, and decodes Google polylines into
+ * latitude/longitude points for map rendering.
+ */
 const { HttpError } = require("../lib/http");
 
 const GOOGLE_ROUTES_URL =

@@ -1,3 +1,10 @@
+/**
+ * Trip routes.
+ *
+ * This file contains the self-developed trip API: list, create, read, update,
+ * delete, and trip-specific module endpoints such as weather, forecast,
+ * recommendations, agenda, and country information.
+ */
 const express = require("express");
 const {
   listTrips,
@@ -7,13 +14,26 @@ const {
   deleteTrip,
   getTripGooglePlaces,
 } = require("../data/store");
-const { HttpError, assertRequiredFields } = require("../lib/http");
+const {
+  HttpError,
+  assertProvidedFieldsNotEmpty,
+  assertRequiredFields,
+} = require("../lib/http");
 const agendaService = require("../services/agendaService");
 const countryService = require("../services/countryService");
 const foursquareService = require("../services/foursquareService");
+const reverseGeocodeService = require("../services/reverseGeocodeService");
 const weatherService = require("../services/weatherService");
 
 const tripRouter = express.Router();
+const REQUIRED_TRIP_FIELDS = [
+  "destinationName",
+  "destinationCountry",
+  "latitude",
+  "longitude",
+  "startDate",
+  "endDate",
+];
 
 
 tripRouter.get("/", (req, res) => {
@@ -26,14 +46,7 @@ tripRouter.get("/", (req, res) => {
 });
 
 tripRouter.post("/", (req, res) => {
-  assertRequiredFields(req.body, [
-    "destinationName",
-    "destinationCountry",
-    "latitude",
-    "longitude",
-    "startDate",
-    "endDate",
-  ]);
+  assertRequiredFields(req.body, REQUIRED_TRIP_FIELDS);
 
   const created = createTrip(req.body);
   res.status(201).json({
@@ -125,7 +138,7 @@ tripRouter.get("/:id/recommendations", async (req, res, next) => {
 
     return res.json({
       success: true,
-      provider: "foursquare",
+      provider: "foursquare-with-geoapify-fallback",
       tripId: req.params.id,
       limit,
       limits: Object.fromEntries(
@@ -151,6 +164,9 @@ tripRouter.get("/:id/agenda", async (req, res, next) => {
     );
     const availabilityDays = parseAvailabilityDays(req.query.availabilityDays);
     const routeMapDays = parseRouteMapDays(req.query.routeMapDays);
+    const routeMapDayIndexes = parseRouteMapDayIndexes(
+      req.query.routeMapDayIndexes,
+    );
     const [dailyWeatherForecast, recommendationGroups] = await Promise.all([
       weatherService
         .fetchDailyForecast(
@@ -177,6 +193,7 @@ tripRouter.get("/:id/agenda", async (req, res, next) => {
       recommendationGroups,
       availabilityDays,
       routeMapDays,
+      routeMapDayIndexes,
     });
 
     return res.json({
@@ -197,7 +214,8 @@ tripRouter.get("/:id/country-info", async (req, res, next) => {
       throw new HttpError(404, "Trip not found.");
     }
 
-    const countryData = await countryService.fetchCountryData(trip.destinationCountry);
+    const countryName = await resolveTripCountryName(trip);
+    const countryData = await countryService.fetchCountryData(countryName);
 
     return res.json({
       success: true,
@@ -222,6 +240,7 @@ tripRouter.get("/:id", (req, res) => {
 });
 
 tripRouter.put("/:id", (req, res) => {
+  assertProvidedFieldsNotEmpty(req.body, REQUIRED_TRIP_FIELDS);
   const updated = updateTrip(req.params.id, req.body);
   if (!updated) {
     throw new HttpError(404, "Trip not found.");
@@ -248,6 +267,24 @@ tripRouter.delete("/:id", (req, res) => {
 
 module.exports = { tripRouter };
 
+async function resolveTripCountryName(trip) {
+  const storedCountry = String(trip.destinationCountry ?? "").trim();
+  if (storedCountry.length > 0) {
+    return storedCountry;
+  }
+
+  const result = await reverseGeocodeService.reverseGeocode(
+    Number(trip.latitude),
+    Number(trip.longitude),
+  );
+  const geocodedCountry = String(result.country ?? "").trim();
+  if (geocodedCountry.length > 0) {
+    return geocodedCountry;
+  }
+
+  throw new HttpError(404, "Country unavailable for this trip.");
+}
+
 function parseRecommendationLimit(value) {
   const parsed = Number(value);
   return [3, 5, 10].includes(parsed) ? parsed : 5;
@@ -256,9 +293,20 @@ function parseRecommendationLimit(value) {
 function parseRouteMapDays(value) {
   const parsed = Number(value);
   if (!Number.isInteger(parsed)) {
-    return 1;
+    return 0;
   }
-  return Math.min(Math.max(parsed, 0), 7);
+  return Math.min(Math.max(parsed, 0), 21);
+}
+
+function parseRouteMapDayIndexes(value) {
+  if (Array.isArray(value)) {
+    return value.flatMap(parseRouteMapDayIndexes);
+  }
+
+  return String(value ?? "")
+    .split(",")
+    .map((item) => Number(item.trim()))
+    .filter((item) => Number.isInteger(item) && item >= 0 && item < 21);
 }
 
 function parseAvailabilityDays(value) {

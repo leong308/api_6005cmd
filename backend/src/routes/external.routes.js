@@ -1,3 +1,10 @@
+/**
+ * External provider proxy routes.
+ *
+ * This file exposes backend endpoints that call third-party services or return
+ * provider-shaped mock data. Keeping these calls in the backend protects keys,
+ * centralizes validation, and gives Flutter a stable API shape.
+ */
 const express = require("express");
 const { HttpError } = require("../lib/http");
 const countryService = require("../services/countryService");
@@ -166,7 +173,7 @@ externalRouter.get("/recommendations", async (req, res, next) => {
 
     return res.json({
       success: true,
-      provider: "foursquare",
+      provider: "foursquare-with-geoapify-fallback",
       data,
     });
   } catch (error) {

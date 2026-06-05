@@ -5,10 +5,13 @@ import 'package:api_6005cmd/features/add_trip/data/add_trip_form_data.dart';
 import 'package:api_6005cmd/features/trip_summary/data/trip_summary_data_source.dart';
 import 'package:api_6005cmd/features/trip_summary/model/trip_summary_model.dart';
 import 'package:api_6005cmd/shared/view/free_vector_map.dart';
-import 'package:api_6005cmd/shared/view/layer_badges.dart';
 import 'package:api_6005cmd/shared/view/mac_panel.dart';
 import 'package:api_6005cmd/shared/view/section_header.dart';
+import 'package:api_6005cmd/shared/util/external_url_launcher_stub.dart'
+    if (dart.library.io) 'package:api_6005cmd/shared/util/external_url_launcher_io.dart'
+    if (dart.library.html) 'package:api_6005cmd/shared/util/external_url_launcher_web.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 enum _SummaryTab {
   overview('Overview', Icons.space_dashboard_rounded),
@@ -40,12 +43,7 @@ enum _RouteMode {
 }
 
 class TripSummaryPage extends StatefulWidget {
-  const TripSummaryPage({
-    super.key,
-    required this.dataSource,
-    required this.tripId,
-    required this.onEditTrip,
-  });
+  const TripSummaryPage({super.key, required this.dataSource, required this.tripId, required this.onEditTrip});
 
   final TripSummaryDataSource dataSource;
   final String tripId;
@@ -59,6 +57,7 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
   late Future<TripSummaryModel?> _summaryFuture;
   _SummaryTab _tab = _SummaryTab.overview;
   final Map<String, int> _recommendationLimits = {};
+  final Set<int> _routeMapDayIndexes = {};
 
   @override
   void initState() {
@@ -71,6 +70,7 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.tripId != widget.tripId) {
       _recommendationLimits.clear();
+      _routeMapDayIndexes.clear();
       _summaryFuture = _fetchSummary();
     }
   }
@@ -79,11 +79,23 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
     return widget.dataSource.fetchSummary(
       widget.tripId,
       recommendationLimits: Map.unmodifiable(_recommendationLimits),
+      routeMapDayIndexes: Set.unmodifiable(_routeMapDayIndexes),
     );
   }
 
   void _refreshMock() {
     setState(() {
+      _routeMapDayIndexes.clear();
+      _summaryFuture = _fetchSummary();
+    });
+  }
+
+  void _loadAgendaRouteForDay(int dayIndex) {
+    if (_routeMapDayIndexes.contains(dayIndex)) {
+      return;
+    }
+    setState(() {
+      _routeMapDayIndexes.add(dayIndex);
       _summaryFuture = _fetchSummary();
     });
   }
@@ -105,10 +117,7 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
       future: _summaryFuture,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return _SummaryError(
-            message: snapshot.error.toString(),
-            onRetry: _refreshMock,
-          );
+          return _SummaryError(message: snapshot.error.toString(), onRetry: _refreshMock);
         }
 
         if (snapshot.connectionState != ConnectionState.done) {
@@ -117,21 +126,15 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
 
         final summary = snapshot.data;
         if (summary == null) {
-          return const Center(
-            child: Text('No trip found. Select a trip from Home / Trip List.'),
-          );
+          return const Center(child: Text('No trip found. Select a trip from Home / Trip List.'));
         }
 
-        final json = const JsonEncoder.withIndent(
-          '  ',
-        ).convert(summary.toJson());
+        final json = const JsonEncoder.withIndent('  ').convert(summary.toJson());
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SectionHeader(
               title: 'Trip Details / Smart Travel Summary',
-              subtitle:
-                  'One linked story from one trip record. Switch views to inspect the overview or raw payload.',
               trailing: FilledButton.tonalIcon(
                 onPressed: _refreshMock,
                 icon: const Icon(Icons.sync_rounded),
@@ -139,16 +142,7 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
               ),
             ),
             const SizedBox(height: 12),
-            const LayerBadges(
-              dataLayer: 'TripSummaryDataSource',
-              modelLayer: 'TripSummaryModel',
-              viewLayer: 'TripSummaryPage',
-            ),
-            const SizedBox(height: 12),
-            _TabSwitcher(
-              value: _tab,
-              onChanged: (next) => setState(() => _tab = next),
-            ),
+            _TabSwitcher(value: _tab, onChanged: (next) => setState(() => _tab = next)),
             const SizedBox(height: 12),
             Expanded(
               child: AnimatedSwitcher(
@@ -162,6 +156,8 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
                       routeLoader: widget.dataSource.fetchWalkingRoute,
                       recommendationLimits: _recommendationLimits,
                       onRecommendationLimitChanged: _setRecommendationLimit,
+                      requestedAgendaRouteDays: _routeMapDayIndexes,
+                      onLoadAgendaRouteDay: _loadAgendaRouteForDay,
                     ),
                     _SummaryTab.json => _JsonTab(json: json),
                   },
@@ -191,22 +187,11 @@ class _SummaryError extends StatelessWidget {
           children: [
             const Icon(Icons.cloud_off_rounded, color: AppPalette.coral),
             const SizedBox(height: 8),
-            Text(
-              'Could not load live trip summary',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
+            Text('Could not load live trip summary', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 6),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            Text(message, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: 12),
-            FilledButton.tonalIcon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Retry'),
-            ),
+            FilledButton.tonalIcon(onPressed: onRetry, icon: const Icon(Icons.refresh_rounded), label: const Text('Retry')),
           ],
         ),
       ),
@@ -226,15 +211,7 @@ class _TabSwitcher extends StatelessWidget {
       padding: const EdgeInsets.all(8),
       color: AppPalette.whiteA(0.78),
       child: SegmentedButton<_SummaryTab>(
-        segments: _SummaryTab.values
-            .map(
-              (tab) => ButtonSegment<_SummaryTab>(
-                value: tab,
-                icon: Icon(tab.icon),
-                label: Text(tab.label),
-              ),
-            )
-            .toList(),
+        segments: _SummaryTab.values.map((tab) => ButtonSegment<_SummaryTab>(value: tab, icon: Icon(tab.icon), label: Text(tab.label))).toList(),
         selected: {value},
         onSelectionChanged: (selected) => onChanged(selected.first),
       ),
@@ -249,14 +226,17 @@ class _OverviewTab extends StatelessWidget {
     required this.routeLoader,
     required this.recommendationLimits,
     required this.onRecommendationLimitChanged,
+    required this.requestedAgendaRouteDays,
+    required this.onLoadAgendaRouteDay,
   });
 
   final TripSummaryModel summary;
   final VoidCallback onEditTrip;
   final _WalkingRouteLoader routeLoader;
   final Map<String, int> recommendationLimits;
-  final void Function(String preference, int limit)
-  onRecommendationLimitChanged;
+  final void Function(String preference, int limit) onRecommendationLimitChanged;
+  final Set<int> requestedAgendaRouteDays;
+  final ValueChanged<int> onLoadAgendaRouteDay;
 
   @override
   Widget build(BuildContext context) {
@@ -266,7 +246,7 @@ class _OverviewTab extends StatelessWidget {
         const SizedBox(height: 12),
         _MiniForecastPattern(forecast: summary.dailyWeatherForecast),
         const SizedBox(height: 12),
-        _TripAgendaCard(agenda: summary.tripAgenda),
+        _TripAgendaCard(agenda: summary.tripAgenda, requestedRouteDays: requestedAgendaRouteDays, onLoadRouteDay: onLoadAgendaRouteDay),
         const SizedBox(height: 12),
         _OverviewRecommendationCard(
           summary: summary,
@@ -278,9 +258,7 @@ class _OverviewTab extends StatelessWidget {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: [
-            FilledButton(onPressed: onEditTrip, child: const Text('Edit Trip')),
-          ],
+          children: [FilledButton(onPressed: onEditTrip, child: const Text('Edit Trip'))],
         ),
       ],
     );
@@ -298,8 +276,7 @@ class _OverviewRecommendationCard extends StatelessWidget {
   final TripSummaryModel summary;
   final _WalkingRouteLoader routeLoader;
   final Map<String, int> recommendationLimits;
-  final void Function(String preference, int limit)
-  onRecommendationLimitChanged;
+  final void Function(String preference, int limit) onRecommendationLimitChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -333,14 +310,9 @@ class _TripDetailsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final trip = summary.trip;
-    final destination = trip.destinationName.trim().isEmpty
-        ? 'Untitled destination'
-        : trip.destinationName.trim();
-    final country = trip.destinationCountry.trim().isEmpty
-        ? 'Country unavailable'
-        : trip.destinationCountry.trim();
-    final coordinateLabel =
-        '${trip.latitude.toStringAsFixed(4)}, ${trip.longitude.toStringAsFixed(4)}';
+    final destination = trip.destinationName.trim().isEmpty ? 'Untitled destination' : trip.destinationName.trim();
+    final country = trip.destinationCountry.trim().isEmpty ? 'Country unavailable' : trip.destinationCountry.trim();
+    final coordinateLabel = '${trip.latitude.toStringAsFixed(4)}, ${trip.longitude.toStringAsFixed(4)}';
     final notes = trip.travelNotes.trim();
 
     return MacPanel(
@@ -360,11 +332,7 @@ class _TripDetailsCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: AppPalette.coralA(0.26)),
                 ),
-                child: const Icon(
-                  Icons.flight_takeoff_rounded,
-                  color: AppPalette.coral,
-                  size: 24,
-                ),
+                child: const Icon(Icons.flight_takeoff_rounded, color: AppPalette.coral, size: 24),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -373,20 +341,12 @@ class _TripDetailsCard extends StatelessWidget {
                   children: [
                     Text(
                       destination,
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                            color: AppPalette.ink,
-                          ),
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontSize: 24, fontWeight: FontWeight.w800, color: AppPalette.ink),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       country,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppPalette.inkA(0.68),
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppPalette.inkA(0.68), fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
@@ -422,12 +382,7 @@ class _TripDetailsCard extends StatelessWidget {
                 width: 300,
                 trailing: _MapIconButton(
                   tooltip: 'Open pinned trip location',
-                  onPressed: () => _showPinnedMapDialog(
-                    context,
-                    title: destination,
-                    latitude: trip.latitude,
-                    longitude: trip.longitude,
-                  ),
+                  onPressed: () => _showPinnedMapDialog(context, title: destination, latitude: trip.latitude, longitude: trip.longitude),
                 ),
               ),
             ],
@@ -444,11 +399,7 @@ class _TripDetailsCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.sticky_note_2_rounded,
-                  color: AppPalette.inkA(0.62),
-                  size: 20,
-                ),
+                Icon(Icons.sticky_note_2_rounded, color: AppPalette.inkA(0.62), size: 20),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -456,18 +407,10 @@ class _TripDetailsCard extends StatelessWidget {
                     children: [
                       Text(
                         'Travel Notes',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppPalette.inkA(0.62),
-                          fontWeight: FontWeight.w700,
-                        ),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.62), fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 3),
-                      Text(
-                        notes.isEmpty ? 'No travel notes added.' : notes,
-                        style: Theme.of(
-                          context,
-                        ).textTheme.bodyMedium?.copyWith(height: 1.35),
-                      ),
+                      Text(notes.isEmpty ? 'No travel notes added.' : notes, style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.35)),
                     ],
                   ),
                 ),
@@ -524,20 +467,14 @@ class _TripDetailTile extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppPalette.inkA(0.58),
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.58), fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   value,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppPalette.ink,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppPalette.ink, fontWeight: FontWeight.w700),
                 ),
                 if (supporting != null && supporting!.trim().isNotEmpty) ...[
                   const SizedBox(height: 1),
@@ -545,9 +482,7 @@ class _TripDetailTile extends StatelessWidget {
                     supporting!,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppPalette.inkA(0.58),
-                    ),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.58)),
                   ),
                 ],
               ],
@@ -597,17 +532,9 @@ class _MiniForecastPatternState extends State<_MiniForecastPattern> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Daily Weather Forecast',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+                  Text('Daily Weather Forecast', style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 4),
-                  Text(
-                    forecast.message,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppPalette.inkA(0.72),
-                    ),
-                  ),
+                  Text(forecast.message, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppPalette.inkA(0.72))),
                 ],
               ),
             ),
@@ -623,16 +550,9 @@ class _MiniForecastPatternState extends State<_MiniForecastPattern> {
         children: [
           Row(
             children: [
-              const Icon(
-                Icons.calendar_month_rounded,
-                color: AppPalette.blue,
-                size: 20,
-              ),
+              const Icon(Icons.calendar_month_rounded, color: AppPalette.blue, size: 20),
               const SizedBox(width: 8),
-              Text(
-                'Daily Weather Forecast',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+              Text('Daily Weather Forecast', style: Theme.of(context).textTheme.titleMedium),
             ],
           ),
           const SizedBox(height: 12),
@@ -682,10 +602,7 @@ class _MiniForecastNode extends StatelessWidget {
             children: [
               Icon(_forecastIcon(day.iconCode), color: AppPalette.blue),
               const SizedBox(width: 6),
-              Text(
-                _shortDateLabel(day.date),
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
+              Text(_shortDateLabel(day.date), style: const TextStyle(fontWeight: FontWeight.w700)),
             ],
           ),
           const SizedBox(height: 6),
@@ -700,18 +617,14 @@ class _MiniForecastNode extends StatelessWidget {
             textAlign: TextAlign.center,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.66)),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.66)),
           ),
           if (day.precipitationProbabilityMax != null) ...[
             const SizedBox(height: 2),
             Text(
               '${_formatNumber(day.precipitationProbabilityMax!)}% rain',
               textAlign: TextAlign.center,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.66)),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.66)),
             ),
           ],
         ],
@@ -733,10 +646,7 @@ class _ForecastConnector extends StatelessWidget {
         child: Center(
           child: Container(
             height: 2,
-            decoration: BoxDecoration(
-              color: AppPalette.blueA(0.36),
-              borderRadius: BorderRadius.circular(99),
-            ),
+            decoration: BoxDecoration(color: AppPalette.blueA(0.36), borderRadius: BorderRadius.circular(99)),
           ),
         ),
       ),
@@ -745,15 +655,18 @@ class _ForecastConnector extends StatelessWidget {
 }
 
 class _TripAgendaCard extends StatelessWidget {
-  const _TripAgendaCard({required this.agenda});
+  const _TripAgendaCard({required this.agenda, required this.requestedRouteDays, required this.onLoadRouteDay});
 
   final TripAgendaModel agenda;
+  final Set<int> requestedRouteDays;
+  final ValueChanged<int> onLoadRouteDay;
 
   @override
   Widget build(BuildContext context) {
     if (agenda.days.isEmpty) {
       return const SizedBox.shrink();
     }
+    final totalStops = agenda.days.fold<int>(0, (total, day) => total + day.items.length);
 
     return MacPanel(
       color: AppPalette.mintA(0.07),
@@ -764,49 +677,41 @@ class _TripAgendaCard extends StatelessWidget {
             children: [
               const Icon(Icons.route_rounded, color: AppPalette.mint),
               const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Trip Agenda / Tour Guide',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-              Text(
-                '${agenda.tripDays} days',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppPalette.inkA(0.62),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+              Expanded(child: Text('Trip Agenda / Tour Guide', style: Theme.of(context).textTheme.titleMedium)),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _AgendaSummaryChip(icon: Icons.calendar_month_rounded, label: '${agenda.tripDays} days'),
+              _AgendaSummaryChip(icon: Icons.place_rounded, label: '$totalStops stops'),
+              if (agenda.pattern.isNotEmpty) _AgendaSummaryChip(icon: Icons.auto_awesome_rounded, label: agenda.pattern),
+            ],
+          ),
+          const SizedBox(height: 8),
           Text(
-            agenda.pattern.isEmpty
-                ? agenda.title
-                : '${agenda.title} • ${agenda.pattern}',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.66)),
+            agenda.pattern.isEmpty ? agenda.title : '${agenda.title} • ${agenda.pattern}',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.66)),
           ),
           const SizedBox(height: 12),
           Column(
             children: [
               for (var index = 0; index < agenda.days.length; index++) ...[
-                _TripAgendaDayTile(day: agenda.days[index]),
-                if (index != agenda.days.length - 1)
-                  Divider(color: AppPalette.inkA(0.1), height: 18),
+                _TripAgendaDayTile(
+                  day: agenda.days[index],
+                  dayIndex: index,
+                  routeRequested: requestedRouteDays.contains(index),
+                  onLoadRoute: () => onLoadRouteDay(index),
+                ),
+                if (index != agenda.days.length - 1) const SizedBox(height: 10),
               ],
             ],
           ),
           if (agenda.checklist.isNotEmpty) ...[
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: agenda.checklist
-                  .map((item) => _AgendaChecklistChip(label: item))
-                  .toList(),
-            ),
+            Wrap(spacing: 8, runSpacing: 8, children: agenda.checklist.map((item) => _AgendaChecklistChip(label: item)).toList()),
           ],
         ],
       ),
@@ -815,116 +720,277 @@ class _TripAgendaCard extends StatelessWidget {
 }
 
 class _TripAgendaDayTile extends StatelessWidget {
-  const _TripAgendaDayTile({required this.day});
+  const _TripAgendaDayTile({required this.day, required this.dayIndex, required this.routeRequested, required this.onLoadRoute});
 
   final TripAgendaDayModel day;
+  final int dayIndex;
+  final bool routeRequested;
+  final VoidCallback onLoadRoute;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 92,
-          child: Column(
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppPalette.whiteA(0.58),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppPalette.mintA(0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                day.label,
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                _shortDateLabel(day.date),
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.62)),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                day.theme,
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-              if (day.weatherNote.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(
-                  day.weatherNote,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.66)),
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppPalette.mintA(0.14),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppPalette.mintA(0.24)),
                 ),
-              ],
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: day.items
-                    .map((item) => _AgendaItemChip(item: item))
-                    .toList(),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'DAY',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppPalette.mint, fontWeight: FontWeight.w800, height: 1),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      '${dayIndex + 1}',
+                      style: const TextStyle(color: AppPalette.mint, fontWeight: FontWeight.w900, height: 1),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 10),
-              _AgendaDayRouteMap(routeMap: day.routeMap),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${day.label} • ${_shortDateLabel(day.date)}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.62), fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      day.theme,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.tonalIcon(
+                onPressed: routeRequested ? null : onLoadRoute,
+                icon: Icon(routeRequested ? Icons.route_rounded : Icons.alt_route_rounded, size: 16),
+                label: Text(routeRequested ? 'Loaded' : 'Get route'),
+              ),
             ],
           ),
-        ),
-      ],
+          if (day.weatherNote.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _AgendaInlineNotice(icon: Icons.thunderstorm_rounded, text: day.weatherNote),
+          ],
+          const SizedBox(height: 10),
+          Column(
+            children: [
+              for (var itemIndex = 0; itemIndex < day.items.length; itemIndex++) ...[
+                _AgendaItemTile(item: day.items[itemIndex], stopNumber: itemIndex + 1),
+                if (itemIndex != day.items.length - 1) const SizedBox(height: 6),
+              ],
+            ],
+          ),
+          if (routeRequested) ...[const SizedBox(height: 10), _AgendaDayRouteMap(routeMap: day.routeMap)],
+        ],
+      ),
     );
   }
 }
 
-class _AgendaDayRouteMap extends StatelessWidget {
+class _AgendaSummaryChip extends StatelessWidget {
+  const _AgendaSummaryChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppPalette.whiteA(0.72),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppPalette.mintA(0.22)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: AppPalette.mint),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.72), fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AgendaInlineNotice extends StatelessWidget {
+  const _AgendaInlineNotice({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: AppPalette.blueA(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppPalette.blueA(0.18)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: AppPalette.blue),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.66), fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AgendaDayRouteMap extends StatefulWidget {
   const _AgendaDayRouteMap({required this.routeMap});
 
   final AgendaRouteMapModel routeMap;
 
   @override
-  Widget build(BuildContext context) {
-    final markerPoints = routeMap.markers
-        .where((marker) => marker.latitude != null && marker.longitude != null)
-        .map(
-          (marker) => FreeVectorMapPoint(
-            latitude: marker.latitude!,
-            longitude: marker.longitude!,
-            color: _colorFromHex(marker.color, fallback: AppPalette.blue),
-            radius: marker.kind == 'start' ? 8 : 6.8,
-          ),
-        )
-        .toList();
-    final routeLines = routeMap.legs
-        .where((leg) => leg.path.length > 1)
-        .map(
-          (leg) => FreeVectorMapRoute(
-            points: leg.path
-                .map(
-                  (point) => FreeVectorMapPoint(
-                    latitude: point.latitude,
-                    longitude: point.longitude,
-                    color: _colorFromHex(leg.color, fallback: AppPalette.blue),
-                    radius: 0,
-                  ),
-                )
-                .toList(),
-            color: _colorFromHex(leg.color, fallback: AppPalette.blue),
-            width: leg.routeAvailable ? 5 : 3.2,
-            opacity: leg.routeAvailable ? 0.94 : 0.54,
-          ),
-        )
-        .toList();
+  State<_AgendaDayRouteMap> createState() => _AgendaDayRouteMapState();
+}
 
-    if (markerPoints.length < 2 && routeLines.isEmpty) {
-      return _AgendaRouteUnavailable(message: routeMap.message);
+class _AgendaDayRouteMapState extends State<_AgendaDayRouteMap> {
+  Set<int> _visibleLegNumbers = {};
+  int? _selectedLegNumber;
+
+  @override
+  void initState() {
+    super.initState();
+    _resetVisibleLegs();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AgendaDayRouteMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.routeMap != widget.routeMap) {
+      _resetVisibleLegs();
+    }
+  }
+
+  void _resetVisibleLegs() {
+    final drawableLegs = _drawableLegs(widget.routeMap);
+    if (drawableLegs.isEmpty) {
+      _visibleLegNumbers = {};
+      _selectedLegNumber = null;
+      return;
     }
 
-    final center = markerPoints.isNotEmpty
-        ? markerPoints.first
-        : routeLines.first.points.first;
+    final firstLegNumber = drawableLegs.first.legNumber;
+    _visibleLegNumbers = drawableLegs.length > 3 ? {firstLegNumber} : drawableLegs.map((leg) => leg.legNumber).toSet();
+    _selectedLegNumber = firstLegNumber;
+  }
+
+  void _toggleLeg(AgendaRouteLegModel leg) {
+    setState(() {
+      if (_visibleLegNumbers.contains(leg.legNumber)) {
+        _visibleLegNumbers.remove(leg.legNumber);
+      } else {
+        _visibleLegNumbers.add(leg.legNumber);
+      }
+
+      final visibleLegs = _drawableLegs(widget.routeMap).where((item) => _visibleLegNumbers.contains(item.legNumber)).toList();
+      _selectedLegNumber = visibleLegs.isEmpty
+          ? null
+          : _visibleLegNumbers.contains(leg.legNumber)
+          ? leg.legNumber
+          : visibleLegs.first.legNumber;
+    });
+  }
+
+  void _showAllLegs() {
+    final drawableLegs = _drawableLegs(widget.routeMap);
+    setState(() {
+      _visibleLegNumbers = drawableLegs.map((leg) => leg.legNumber).toSet();
+      _selectedLegNumber = drawableLegs.isEmpty ? null : drawableLegs.first.legNumber;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final drawableLegs = _drawableLegs(widget.routeMap);
+    final visibleLegs = drawableLegs.where((leg) => _visibleLegNumbers.contains(leg.legNumber)).toList();
+    final selectedLeg = _selectedRouteLeg(visibleLegs, _selectedLegNumber);
+    final activeTitles = selectedLeg == null ? const <String>{} : {selectedLeg.fromTitle, selectedLeg.toTitle};
+    final selectedColor = selectedLeg == null ? AppPalette.blue : _colorFromHex(selectedLeg.color, fallback: AppPalette.blue);
+    final markerPoints = widget.routeMap.markers.where((marker) => marker.latitude != null && marker.longitude != null).map((marker) {
+      final isActive = activeTitles.contains(marker.title);
+      return FreeVectorMapPoint(
+        latitude: marker.latitude!,
+        longitude: marker.longitude!,
+        color: isActive ? selectedColor : _colorFromHex(marker.color, fallback: AppPalette.blue),
+        radius: isActive
+            ? 9.2
+            : marker.kind == 'start'
+            ? 8
+            : 6.8,
+      );
+    }).toList();
+    final routeLines = visibleLegs.map((leg) {
+      final isSelected = selectedLeg?.legNumber == leg.legNumber;
+      return FreeVectorMapRoute(
+        points: leg.path
+            .map(
+              (point) => FreeVectorMapPoint(
+                latitude: point.latitude,
+                longitude: point.longitude,
+                color: _colorFromHex(leg.color, fallback: AppPalette.blue),
+                radius: 0,
+              ),
+            )
+            .toList(),
+        color: _colorFromHex(leg.color, fallback: AppPalette.blue),
+        width: isSelected
+            ? 6
+            : leg.routeAvailable
+            ? 4.4
+            : 3,
+        opacity: isSelected
+            ? 0.98
+            : leg.routeAvailable
+            ? 0.58
+            : 0.38,
+      );
+    }).toList();
+
+    if (markerPoints.length < 2 && routeLines.isEmpty) {
+      return _AgendaRouteUnavailable(message: widget.routeMap.message);
+    }
+
+    final center = markerPoints.isNotEmpty ? markerPoints.first : routeLines.first.points.first;
 
     return Container(
       decoration: BoxDecoration(
@@ -941,19 +1007,11 @@ class _AgendaDayRouteMap extends StatelessWidget {
               const Icon(Icons.map_rounded, color: AppPalette.blue, size: 18),
               const SizedBox(width: 7),
               Expanded(
-                child: Text(
-                  'Day Route Overview',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w800),
-                ),
+                child: Text('Day Route Overview', style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w800)),
               ),
               Text(
-                routeMap.modeLabel,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppPalette.inkA(0.62),
-                  fontWeight: FontWeight.w800,
-                ),
+                widget.routeMap.modeLabel,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.62), fontWeight: FontWeight.w800),
               ),
             ],
           ),
@@ -962,51 +1020,58 @@ class _AgendaDayRouteMap extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _AgendaRouteStatChip(
-                icon: Icons.route_rounded,
-                label: _formatRouteDistance(routeMap.totalDistanceMeters),
-              ),
-              _AgendaRouteStatChip(
-                icon: Icons.schedule_rounded,
-                label: _formatRouteDuration(routeMap.totalDurationSeconds),
-              ),
-              _AgendaRouteStatChip(
-                icon: Icons.timeline_rounded,
-                label: '${routeMap.legCount} legs',
-              ),
+              _AgendaRouteStatChip(icon: Icons.route_rounded, label: _formatRouteDistance(widget.routeMap.totalDistanceMeters)),
+              _AgendaRouteStatChip(icon: Icons.schedule_rounded, label: _formatRouteDuration(widget.routeMap.totalDurationSeconds)),
+              _AgendaRouteStatChip(icon: Icons.timeline_rounded, label: '${widget.routeMap.legCount} legs'),
+              if (visibleLegs.length != drawableLegs.length)
+                _AgendaRouteActionChip(icon: Icons.visibility_rounded, label: 'Show all', onTap: _showAllLegs),
             ],
           ),
-          if (routeMap.message.isNotEmpty) ...[
+          if (widget.routeMap.message.isNotEmpty) ...[
             const SizedBox(height: 6),
-            Text(
-              routeMap.message,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.58)),
-            ),
+            Text(widget.routeMap.message, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.58))),
           ],
           const SizedBox(height: 10),
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: SizedBox(
               height: 260,
-              child: FreeVectorMap(
-                centerLatitude: center.latitude,
-                centerLongitude: center.longitude,
-                initialZoom: 13,
-                fitToBounds: true,
-                routes: routeLines,
-                markers: markerPoints,
+              child: Stack(
+                children: [
+                  FreeVectorMap(
+                    centerLatitude: center.latitude,
+                    centerLongitude: center.longitude,
+                    initialZoom: 13,
+                    fitToBounds: true,
+                    routes: routeLines,
+                    markers: markerPoints,
+                  ),
+                  Positioned(
+                    top: 10,
+                    left: 10,
+                    child: _AgendaRouteDetailOverlay(leg: selectedLeg, visibleCount: visibleLegs.length, totalCount: drawableLegs.length),
+                  ),
+                ],
               ),
             ),
           ),
           const SizedBox(height: 8),
+          Text(
+            'Tap a route pill to hide or display that path on the map.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.58)),
+          ),
+          const SizedBox(height: 6),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                for (final leg in routeMap.legs) ...[
-                  _AgendaRouteLegendChip(leg: leg),
+                for (final leg in widget.routeMap.legs) ...[
+                  _AgendaRouteLegendChip(
+                    leg: leg,
+                    visible: _visibleLegNumbers.contains(leg.legNumber),
+                    selected: selectedLeg?.legNumber == leg.legNumber,
+                    onTap: () => _toggleLeg(leg),
+                  ),
                   const SizedBox(width: 8),
                 ],
               ],
@@ -1039,12 +1104,8 @@ class _AgendaRouteUnavailable extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              message.isEmpty
-                  ? 'Route overview appears when recommendation coordinates are available.'
-                  : message,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.62)),
+              message.isEmpty ? 'Route overview appears when recommendation coordinates are available.' : message,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.62)),
             ),
           ),
         ],
@@ -1075,9 +1136,142 @@ class _AgendaRouteStatChip extends StatelessWidget {
           const SizedBox(width: 5),
           Text(
             label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: AppPalette.inkA(0.72),
-              fontWeight: FontWeight.w800,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.72), fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AgendaRouteActionChip extends StatelessWidget {
+  const _AgendaRouteActionChip({required this.icon, required this.label, required this.onTap});
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppPalette.mintA(0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppPalette.mintA(0.24)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: AppPalette.mint),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.72), fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AgendaRouteDetailOverlay extends StatelessWidget {
+  const _AgendaRouteDetailOverlay({required this.leg, required this.visibleCount, required this.totalCount});
+
+  final AgendaRouteLegModel? leg;
+  final int visibleCount;
+  final int totalCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final currentLeg = leg;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 310),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: AppPalette.whiteA(0.92),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppPalette.inkA(0.14)),
+          boxShadow: [BoxShadow(color: AppPalette.inkA(0.12), blurRadius: 12, offset: const Offset(0, 4))],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: currentLeg == null
+              ? Text(
+                  totalCount == 0 ? 'No route legs available.' : 'All route paths hidden. Tap a pill below to display one.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.7), fontWeight: FontWeight.w700),
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 9,
+                          height: 9,
+                          decoration: BoxDecoration(
+                            color: _colorFromHex(currentLeg.color, fallback: AppPalette.blue),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Route ${currentLeg.legNumber}',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.8), fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(width: 8),
+                        Text('$visibleCount/$totalCount shown', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.52))),
+                      ],
+                    ),
+                    const SizedBox(height: 7),
+                    _AgendaRouteOverlayRow(label: 'Depart', value: currentLeg.fromTitle),
+                    _AgendaRouteOverlayRow(label: 'Arrive', value: currentLeg.toTitle),
+                    const SizedBox(height: 5),
+                    Text(
+                      '${_formatRouteDistance(currentLeg.distanceMeters)} • ${_formatRouteDuration(currentLeg.durationSeconds)}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.62), fontWeight: FontWeight.w800),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AgendaRouteOverlayRow extends StatelessWidget {
+  const _AgendaRouteOverlayRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 3),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 46,
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.52), fontWeight: FontWeight.w700),
+            ),
+          ),
+          Flexible(
+            child: Text(
+              value,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.78), fontWeight: FontWeight.w800),
             ),
           ),
         ],
@@ -1087,48 +1281,265 @@ class _AgendaRouteStatChip extends StatelessWidget {
 }
 
 class _AgendaRouteLegendChip extends StatelessWidget {
-  const _AgendaRouteLegendChip({required this.leg});
+  const _AgendaRouteLegendChip({required this.leg, required this.visible, required this.selected, required this.onTap});
 
   final AgendaRouteLegModel leg;
+  final bool visible;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final color = _colorFromHex(leg.color, fallback: AppPalette.blue);
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        constraints: const BoxConstraints(maxWidth: 260),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+        decoration: BoxDecoration(
+          color: visible ? AppPalette.whiteA(0.82) : AppPalette.inkA(0.04),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: selected ? color.withValues(alpha: 0.7) : AppPalette.inkA(visible ? 0.12 : 0.08), width: selected ? 1.4 : 1),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: visible ? 1 : 0.24),
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 7),
+            Icon(visible ? Icons.visibility_rounded : Icons.visibility_off_rounded, size: 13, color: AppPalette.inkA(visible ? 0.62 : 0.32)),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                '${leg.legNumber}. ${leg.toTitle}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(visible ? 0.74 : 0.4), fontWeight: FontWeight.w800),
+              ),
+            ),
+            const SizedBox(width: 7),
+            Text(
+              _formatRouteDistance(leg.distanceMeters),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(visible ? 0.54 : 0.34), fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+List<AgendaRouteLegModel> _drawableLegs(AgendaRouteMapModel routeMap) {
+  return routeMap.legs.where((leg) => leg.path.length > 1).toList();
+}
+
+AgendaRouteLegModel? _selectedRouteLeg(List<AgendaRouteLegModel> visibleLegs, int? selectedLegNumber) {
+  if (visibleLegs.isEmpty) {
+    return null;
+  }
+  for (final leg in visibleLegs) {
+    if (leg.legNumber == selectedLegNumber) {
+      return leg;
+    }
+  }
+  return visibleLegs.first;
+}
+
+class _AgendaItemTile extends StatefulWidget {
+  const _AgendaItemTile({required this.item, required this.stopNumber});
+
+  final TripAgendaItemModel item;
+  final int stopNumber;
+
+  @override
+  State<_AgendaItemTile> createState() => _AgendaItemTileState();
+}
+
+class _AgendaItemTileState extends State<_AgendaItemTile> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final stopNumber = widget.stopNumber;
+    final isVerified = item.availability.verifiedForVisitTime;
+    final hasCoordinates = item.latitude != null && item.longitude != null;
+    final accentColor = item.kind == 'food' ? AppPalette.coral : AppPalette.mint;
+    final categoryLabel = item.category.trim().isEmpty ? item.kind : item.category.trim();
+    final preferenceLabel = item.preference.trim().isEmpty ? '' : AddTripFormData.preferenceLabel(item.preference);
+
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        key: ValueKey('${item.startTime}-${item.endTime}-${item.title}-${item.address}'),
+        initiallyExpanded: false,
+        tilePadding: const EdgeInsets.symmetric(horizontal: 10),
+        childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+        backgroundColor: AppPalette.whiteA(0.78),
+        collapsedBackgroundColor: AppPalette.whiteA(0.72),
+        onExpansionChanged: (expanded) {
+          setState(() {
+            _expanded = expanded;
+          });
+        },
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: AppPalette.mintA(0.22)),
+        ),
+        collapsedShape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: AppPalette.mintA(0.18)),
+        ),
+        leading: Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(color: accentColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+          child: Center(child: Icon(_agendaKindIcon(item.kind), color: accentColor, size: 18)),
+        ),
+        title: Text(
+          '$stopNumber. ${item.title}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _AgendaPlaceActionButton(
+              icon: Icons.map_rounded,
+              tooltip: hasCoordinates ? 'View pinned location' : 'Location pin unavailable',
+              enabled: hasCoordinates,
+              color: AppPalette.mint,
+              onPressed: () => _showPinnedMapDialog(context, title: item.title, latitude: item.latitude!, longitude: item.longitude!),
+            ),
+            const SizedBox(width: 4),
+            _AgendaPlaceActionButton(
+              icon: Icons.open_in_new_rounded,
+              tooltip: 'Open in Google Maps',
+              enabled: true,
+              color: AppPalette.blue,
+              onPressed: () => _openAgendaPlaceInGoogleMaps(context, item),
+            ),
+            const SizedBox(width: 2),
+            AnimatedRotation(
+              turns: _expanded ? 0.5 : 0,
+              duration: const Duration(milliseconds: 180),
+              child: Icon(Icons.expand_more_rounded, color: AppPalette.inkA(0.56)),
+            ),
+          ],
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              _AgendaTinyBadge(icon: Icons.schedule_rounded, label: _agendaTimeLabel(item), color: AppPalette.blue),
+              _AgendaTinyBadge(
+                icon: isVerified ? Icons.check_circle_rounded : Icons.event_available_rounded,
+                label: isVerified ? 'Open' : 'Flexible',
+                color: isVerified ? AppPalette.mint : AppPalette.coral,
+              ),
+              if (item.distanceMeters > 0)
+                _AgendaTinyBadge(icon: Icons.social_distance_rounded, label: _formatRouteDistance(item.distanceMeters), color: AppPalette.ink),
+            ],
+          ),
+        ),
+        children: [
+          const Divider(height: 10),
+          _AgendaDetailRow(
+            icon: Icons.category_rounded,
+            label: 'Category',
+            value: [categoryLabel, if (preferenceLabel.isNotEmpty) preferenceLabel].join(' • '),
+          ),
+          _AgendaDetailRow(
+            icon: Icons.access_time_filled_rounded,
+            label: 'Visit window',
+            value: item.visitWindow.isEmpty ? _agendaTimeLabel(item) : item.visitWindow,
+          ),
+          _AgendaDetailRow(icon: Icons.fact_check_rounded, label: 'Availability', value: item.availability.label),
+          if (item.description.isNotEmpty) _AgendaDetailRow(icon: Icons.notes_rounded, label: 'Why this place', value: item.description),
+          if (item.address.isNotEmpty) _AgendaDetailRow(icon: Icons.location_on_rounded, label: 'Address', value: item.address),
+          if (item.latitude != null && item.longitude != null)
+            _AgendaDetailRow(
+              icon: Icons.map_rounded,
+              label: 'Coordinates',
+              value: '${_formatNumber(item.latitude!)} / ${_formatNumber(item.longitude!)}',
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AgendaPlaceActionButton extends StatelessWidget {
+  const _AgendaPlaceActionButton({required this.icon, required this.tooltip, required this.enabled, required this.color, required this.onPressed});
+
+  final IconData icon;
+  final String tooltip;
+  final bool enabled;
+  final Color color;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveColor = enabled ? color : AppPalette.inkA(0.34);
+    return Tooltip(
+      message: tooltip,
+      child: Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: enabled ? color.withValues(alpha: 0.1) : AppPalette.inkA(0.04),
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(color: enabled ? color.withValues(alpha: 0.2) : AppPalette.inkA(0.08)),
+        ),
+        child: IconButton(
+          visualDensity: VisualDensity.compact,
+          padding: EdgeInsets.zero,
+          iconSize: 16,
+          color: effectiveColor,
+          disabledColor: AppPalette.inkA(0.3),
+          onPressed: enabled ? onPressed : null,
+          icon: Icon(icon),
+        ),
+      ),
+    );
+  }
+}
+
+class _AgendaTinyBadge extends StatelessWidget {
+  const _AgendaTinyBadge({required this.icon, required this.label, required this.color});
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(maxWidth: 250),
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: AppPalette.whiteA(0.74),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppPalette.inkA(0.1)),
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 7),
-          Flexible(
-            child: Text(
-              '${leg.legNumber}. ${leg.toTitle}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppPalette.inkA(0.74),
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          const SizedBox(width: 7),
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 4),
           Text(
-            _formatRouteDistance(leg.distanceMeters),
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: AppPalette.inkA(0.54),
-              fontWeight: FontWeight.w700,
-            ),
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(color: color, fontWeight: FontWeight.w800),
           ),
         ],
       ),
@@ -1136,102 +1547,36 @@ class _AgendaRouteLegendChip extends StatelessWidget {
   }
 }
 
-class _AgendaItemChip extends StatelessWidget {
-  const _AgendaItemChip({required this.item});
+class _AgendaDetailRow extends StatelessWidget {
+  const _AgendaDetailRow({required this.icon, required this.label, required this.value});
 
-  final TripAgendaItemModel item;
+  final IconData icon;
+  final String label;
+  final String value;
 
   @override
   Widget build(BuildContext context) {
-    final isVerified = item.availability.verifiedForVisitTime;
-    return Container(
-      width: 286,
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppPalette.whiteA(0.72),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppPalette.mintA(0.22)),
-      ),
-      child: Column(
+    if (value.trim().isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 7),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(
-                _agendaKindIcon(item.kind),
-                color: item.kind == 'food' ? AppPalette.coral : AppPalette.mint,
-                size: 17,
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  item.timeOfDay,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppPalette.inkA(0.68),
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              Text(
-                item.visitWindow,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppPalette.inkA(0.62),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-            decoration: BoxDecoration(
-              color: isVerified
-                  ? AppPalette.mintA(0.12)
-                  : AppPalette.coralA(0.1),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: isVerified
-                    ? AppPalette.mintA(0.28)
-                    : AppPalette.coralA(0.28),
-              ),
-            ),
+          Icon(icon, size: 16, color: AppPalette.inkA(0.48)),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 96,
             child: Text(
-              isVerified ? 'Open at visit time' : 'Flexible backup',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: isVerified ? AppPalette.mint : AppPalette.coral,
-                fontWeight: FontWeight.w800,
-              ),
+              label,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.58), fontWeight: FontWeight.w800),
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            item.title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w700),
+          Expanded(
+            child: Text(value, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.76))),
           ),
-          if (item.description.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              item.description,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.66)),
-            ),
-          ],
-          if (item.address.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              item.address,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.58)),
-            ),
-          ],
         ],
       ),
     );
@@ -1250,9 +1595,7 @@ class _AgendaChecklistChip extends StatelessWidget {
       label: Text(label),
       side: BorderSide(color: AppPalette.mintA(0.22)),
       backgroundColor: AppPalette.whiteA(0.72),
-      labelStyle: Theme.of(
-        context,
-      ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.74)),
+      labelStyle: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.74)),
     );
   }
 }
@@ -1272,8 +1615,7 @@ class _RecommendationGroupsView extends StatelessWidget {
   final double startLongitude;
   final _WalkingRouteLoader routeLoader;
   final Map<String, int> recommendationLimits;
-  final void Function(String preference, int limit)?
-  onRecommendationLimitChanged;
+  final void Function(String preference, int limit)? onRecommendationLimitChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1285,27 +1627,16 @@ class _RecommendationGroupsView extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(
-                  Icons.recommend_rounded,
-                  color: AppPalette.coral,
-                  size: 20,
-                ),
+                const Icon(Icons.recommend_rounded, color: AppPalette.coral, size: 20),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Recommendations',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
+                Expanded(child: Text('Recommendations', style: Theme.of(context).textTheme.titleMedium)),
                 _RecommendationLimitDropdown(value: 5, onChanged: null),
               ],
             ),
             const SizedBox(height: 10),
             Text(
               'No Foursquare recommendations available for this trip yet.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: AppPalette.inkA(0.72)),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppPalette.inkA(0.72)),
             ),
           ],
         ),
@@ -1354,8 +1685,7 @@ class _RecommendationView extends StatelessWidget {
   final double startLongitude;
   final _WalkingRouteLoader routeLoader;
   final int recommendationLimit;
-  final void Function(String preference, int limit)?
-  onRecommendationLimitChanged;
+  final void Function(String preference, int limit)? onRecommendationLimitChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1365,35 +1695,18 @@ class _RecommendationView extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(
-              _recommendationIconForPreference(group.preference),
-              color: AppPalette.coral,
-              size: 20,
-            ),
+            Icon(_recommendationIconForPreference(group.preference), color: AppPalette.coral, size: 20),
             const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                _recommendationTitleForPreference(group.preference),
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
+            Expanded(child: Text(_recommendationTitleForPreference(group.preference), style: Theme.of(context).textTheme.titleMedium)),
             _RecommendationLimitDropdown(
               value: recommendationLimit,
-              onChanged: onRecommendationLimitChanged == null
-                  ? null
-                  : (limit) =>
-                        onRecommendationLimitChanged!(group.preference, limit),
+              onChanged: onRecommendationLimitChanged == null ? null : (limit) => onRecommendationLimitChanged!(group.preference, limit),
             ),
           ],
         ),
         const SizedBox(height: 10),
         if (recommendations.isEmpty)
-          Text(
-            'No places returned for this preference.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: AppPalette.inkA(0.72)),
-          )
+          Text('No places returned for this preference.', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppPalette.inkA(0.72)))
         else
           Column(
             children: [
@@ -1405,8 +1718,7 @@ class _RecommendationView extends StatelessWidget {
                   startLongitude: startLongitude,
                   routeLoader: routeLoader,
                 ),
-                if (index != recommendations.length - 1)
-                  Divider(color: AppPalette.inkA(0.1), height: 18),
+                if (index != recommendations.length - 1) Divider(color: AppPalette.inkA(0.1), height: 18),
               ],
             ],
           ),
@@ -1416,20 +1728,16 @@ class _RecommendationView extends StatelessWidget {
 }
 
 class _RecommendationLimitDropdown extends StatelessWidget {
-  const _RecommendationLimitDropdown({
-    required this.value,
-    required this.onChanged,
-  });
+  const _RecommendationLimitDropdown({required this.value, required this.onChanged});
 
   final int value;
   final ValueChanged<int>? onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final textStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-      color: AppPalette.inkA(onChanged == null ? 0.48 : 0.82),
-      fontWeight: FontWeight.w700,
-    );
+    final textStyle = Theme.of(
+      context,
+    ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(onChanged == null ? 0.48 : 0.82), fontWeight: FontWeight.w700);
 
     return Container(
       height: 34,
@@ -1445,27 +1753,10 @@ class _RecommendationLimitDropdown extends StatelessWidget {
           value: value,
           isDense: true,
           borderRadius: BorderRadius.circular(8),
-          icon: Icon(
-            Icons.expand_more_rounded,
-            size: 18,
-            color: AppPalette.inkA(onChanged == null ? 0.42 : 0.72),
-          ),
-          selectedItemBuilder: (context) => const [3, 5, 10]
-              .map(
-                (limit) => Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('Show $limit'),
-                ),
-              )
-              .toList(),
-          items: const [3, 5, 10]
-              .map(
-                (limit) => DropdownMenuItem<int>(
-                  value: limit,
-                  child: Text('$limit results'),
-                ),
-              )
-              .toList(),
+          icon: Icon(Icons.expand_more_rounded, size: 18, color: AppPalette.inkA(onChanged == null ? 0.42 : 0.72)),
+          selectedItemBuilder: (context) =>
+              const [3, 5, 10].map((limit) => Align(alignment: Alignment.centerLeft, child: Text('Show $limit'))).toList(),
+          items: const [3, 5, 10].map((limit) => DropdownMenuItem<int>(value: limit, child: Text('$limit results'))).toList(),
           style: textStyle,
           onChanged: onChanged == null
               ? null
@@ -1519,28 +1810,16 @@ class _RecommendationRow extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: AppPalette.coralA(0.24)),
           ),
-          child: Icon(
-            _recommendationIconForPreference(preference),
-            color: AppPalette.coral,
-            size: 18,
-          ),
+          child: Icon(_recommendationIconForPreference(preference), color: AppPalette.coral, size: 18),
         ),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                recommendation.name,
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
+              Text(recommendation.name, style: const TextStyle(fontWeight: FontWeight.w700)),
               const SizedBox(height: 3),
-              Text(
-                details,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.68)),
-              ),
+              Text(details, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.68))),
             ],
           ),
         ),
@@ -1593,12 +1872,7 @@ class _MapIconButton extends StatelessWidget {
   }
 }
 
-Future<void> _showPinnedMapDialog(
-  BuildContext context, {
-  required String title,
-  required double latitude,
-  required double longitude,
-}) {
+Future<void> _showPinnedMapDialog(BuildContext context, {required String title, required double latitude, required double longitude}) {
   return showDialog<void>(
     context: context,
     builder: (context) {
@@ -1615,30 +1889,16 @@ Future<void> _showPinnedMapDialog(
               children: [
                 Row(
                   children: [
-                    const Icon(
-                      Icons.location_on_rounded,
-                      color: AppPalette.coral,
-                    ),
+                    const Icon(Icons.location_on_rounded, color: AppPalette.coral),
                     const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Close map',
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.close_rounded),
-                    ),
+                    Expanded(child: Text(title, style: Theme.of(context).textTheme.titleLarge)),
+                    IconButton(tooltip: 'Close map', onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.close_rounded)),
                   ],
                 ),
                 const SizedBox(height: 4),
                 Text(
                   '${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.62)),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.62)),
                 ),
                 const SizedBox(height: 12),
                 ClipRRect(
@@ -1649,26 +1909,14 @@ Future<void> _showPinnedMapDialog(
                       centerLatitude: latitude,
                       centerLongitude: longitude,
                       initialZoom: 17,
-                      markers: [
-                        FreeVectorMapPoint(
-                          latitude: latitude,
-                          longitude: longitude,
-                          color: AppPalette.coral,
-                          radius: 9,
-                        ),
-                      ],
+                      markers: [FreeVectorMapPoint(latitude: latitude, longitude: longitude, color: AppPalette.coral, radius: 9)],
                     ),
                   ),
                 ),
                 const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerRight,
-                  child: Text(
-                    FreeVectorMap.attribution,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppPalette.inkA(0.55),
-                    ),
-                  ),
+                  child: Text(FreeVectorMap.attribution, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.55))),
                 ),
               ],
             ),
@@ -1677,6 +1925,24 @@ Future<void> _showPinnedMapDialog(
       );
     },
   );
+}
+
+Future<void> _openAgendaPlaceInGoogleMaps(BuildContext context, TripAgendaItemModel item) async {
+  final url = _googleMapsUrlForAgendaItem(item);
+  try {
+    final opened = await openExternalUrl(url);
+    if (opened) {
+      return;
+    }
+  } catch (error) {
+    debugPrint('Could not open Google Maps link: $error');
+  }
+
+  await Clipboard.setData(ClipboardData(text: url));
+  if (!context.mounted) {
+    return;
+  }
+  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Google Maps link copied. Open it in your browser.')));
 }
 
 Future<void> _showWalkingRouteDialog(
@@ -1690,13 +1956,7 @@ Future<void> _showWalkingRouteDialog(
 }) {
   var selectedMode = _RouteMode.walk;
   Future<WalkingRouteModel> loadRoute(_RouteMode mode) {
-    return routeLoader(
-      fromLatitude: fromLatitude,
-      fromLongitude: fromLongitude,
-      toLatitude: toLatitude,
-      toLongitude: toLongitude,
-      mode: mode.value,
-    );
+    return routeLoader(fromLatitude: fromLatitude, fromLongitude: fromLongitude, toLatitude: toLatitude, toLongitude: toLongitude, mode: mode.value);
   }
 
   var routeFuture = loadRoute(selectedMode);
@@ -1725,17 +1985,8 @@ Future<void> _showWalkingRouteDialog(
                           children: [
                             Icon(selectedMode.icon, color: AppPalette.coral),
                             const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                title,
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
-                            ),
-                            IconButton(
-                              tooltip: 'Close route',
-                              onPressed: () => Navigator.of(context).pop(),
-                              icon: const Icon(Icons.close_rounded),
-                            ),
+                            Expanded(child: Text(title, style: Theme.of(context).textTheme.titleLarge)),
+                            IconButton(tooltip: 'Close route', onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.close_rounded)),
                           ],
                         ),
                         const SizedBox(height: 10),
@@ -1750,18 +2001,14 @@ Future<void> _showWalkingRouteDialog(
                         ),
                         const SizedBox(height: 12),
                         if (snapshot.connectionState != ConnectionState.done)
-                          const SizedBox(
-                            height: 420,
-                            child: Center(child: CircularProgressIndicator()),
-                          )
+                          const SizedBox(height: 420, child: Center(child: CircularProgressIndicator()))
                         else if (snapshot.hasError)
                           SizedBox(
                             height: 240,
                             child: Center(
                               child: Text(
                                 snapshot.error.toString(),
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(color: AppPalette.coral),
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppPalette.coral),
                               ),
                             ),
                           )
@@ -1783,22 +2030,14 @@ Future<void> _showWalkingRouteDialog(
                               _RouteStatChip(
                                 icon: Icons.route_rounded,
                                 label: '${route.modeLabel} Distance',
-                                value: _formatRouteDistance(
-                                  route.distanceMeters,
-                                ),
+                                value: _formatRouteDistance(route.distanceMeters),
                               ),
                               _RouteStatChip(
                                 icon: Icons.schedule_rounded,
                                 label: '${route.modeLabel} Time',
-                                value: _formatRouteDuration(
-                                  route.estimatedWalkingSeconds,
-                                ),
+                                value: _formatRouteDuration(route.estimatedWalkingSeconds),
                               ),
-                              _RouteStatChip(
-                                icon: Icons.map_rounded,
-                                label: 'Route Source',
-                                value: _routeSourceLabel(route),
-                              ),
+                              _RouteStatChip(icon: Icons.map_rounded, label: 'Route Source', value: _routeSourceLabel(route)),
                             ],
                           ),
                           const SizedBox(height: 12),
@@ -1824,11 +2063,7 @@ Future<void> _showWalkingRouteDialog(
 }
 
 class _RouteStatChip extends StatelessWidget {
-  const _RouteStatChip({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
+  const _RouteStatChip({required this.icon, required this.label, required this.value});
 
   final IconData icon;
   final String label;
@@ -1852,12 +2087,7 @@ class _RouteStatChip extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                label,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.62)),
-              ),
+              Text(label, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.62))),
               Text(value, style: Theme.of(context).textTheme.titleSmall),
             ],
           ),
@@ -1883,11 +2113,7 @@ class _RouteModeTabBar extends StatelessWidget {
         child: Row(
           children: [
             for (final mode in _RouteMode.values) ...[
-              _RouteModeTab(
-                mode: mode,
-                selected: selectedMode == mode,
-                onTap: () => onChanged(mode),
-              ),
+              _RouteModeTab(mode: mode, selected: selectedMode == mode, onTap: () => onChanged(mode)),
               if (mode != _RouteMode.values.last) const SizedBox(width: 6),
             ],
           ],
@@ -1898,11 +2124,7 @@ class _RouteModeTabBar extends StatelessWidget {
 }
 
 class _RouteModeTab extends StatelessWidget {
-  const _RouteModeTab({
-    required this.mode,
-    required this.selected,
-    required this.onTap,
-  });
+  const _RouteModeTab({required this.mode, required this.selected, required this.onTap});
 
   final _RouteMode mode;
   final bool selected;
@@ -1920,18 +2142,8 @@ class _RouteModeTab extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? AppPalette.coral : AppPalette.whiteA(0.56),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: selected ? AppPalette.coral : AppPalette.inkA(0.12),
-          ),
-          boxShadow: selected
-              ? [
-                  BoxShadow(
-                    color: AppPalette.coralA(0.22),
-                    blurRadius: 12,
-                    offset: const Offset(0, 6),
-                  ),
-                ]
-              : null,
+          border: Border.all(color: selected ? AppPalette.coral : AppPalette.inkA(0.12)),
+          boxShadow: selected ? [BoxShadow(color: AppPalette.coralA(0.22), blurRadius: 12, offset: const Offset(0, 6))] : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1940,10 +2152,7 @@ class _RouteModeTab extends StatelessWidget {
             const SizedBox(width: 7),
             Text(
               mode.label,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: foreground,
-                fontWeight: FontWeight.w700,
-              ),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: foreground, fontWeight: FontWeight.w700),
             ),
           ],
         ),
@@ -1970,14 +2179,7 @@ class _WalkingRouteMap extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final routePoints = route.path
-        .map(
-          (point) => FreeVectorMapPoint(
-            latitude: point.latitude,
-            longitude: point.longitude,
-            color: AppPalette.blue,
-            radius: 0,
-          ),
-        )
+        .map((point) => FreeVectorMapPoint(latitude: point.latitude, longitude: point.longitude, color: AppPalette.blue, radius: 0))
         .toList();
 
     return Column(
@@ -1990,38 +2192,18 @@ class _WalkingRouteMap extends StatelessWidget {
             child: FreeVectorMap(
               centerLatitude: (fromLatitude + toLatitude) / 2,
               centerLongitude: (fromLongitude + toLongitude) / 2,
-              initialZoom: _initialRouteZoom(
-                fromLatitude,
-                fromLongitude,
-                toLatitude,
-                toLongitude,
-              ),
+              initialZoom: _initialRouteZoom(fromLatitude, fromLongitude, toLatitude, toLongitude),
               fitToBounds: true,
               route: routePoints,
               markers: [
-                FreeVectorMapPoint(
-                  latitude: fromLatitude,
-                  longitude: fromLongitude,
-                  color: AppPalette.blue,
-                  radius: 7,
-                ),
-                FreeVectorMapPoint(
-                  latitude: toLatitude,
-                  longitude: toLongitude,
-                  color: AppPalette.coral,
-                  radius: 9,
-                ),
+                FreeVectorMapPoint(latitude: fromLatitude, longitude: fromLongitude, color: AppPalette.blue, radius: 7),
+                FreeVectorMapPoint(latitude: toLatitude, longitude: toLongitude, color: AppPalette.coral, radius: 9),
               ],
             ),
           ),
         ),
         const SizedBox(height: 8),
-        Text(
-          FreeVectorMap.attribution,
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.55)),
-        ),
+        Text(FreeVectorMap.attribution, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.55))),
       ],
     );
   }
@@ -2038,10 +2220,7 @@ class _SummaryJsonCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Combined Response Preview (GET /api/trips/:id/summary)',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
+          Text('Combined Response Preview (GET /api/trips/:id/summary)', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Container(
             width: double.infinity,
@@ -2052,14 +2231,7 @@ class _SummaryJsonCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
             ),
             child: SingleChildScrollView(
-              child: SelectableText(
-                json,
-                style: const TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 12.8,
-                  height: 1.4,
-                ),
-              ),
+              child: SelectableText(json, style: const TextStyle(fontFamily: 'monospace', fontSize: 12.8, height: 1.4)),
             ),
           ),
         ],
@@ -2147,13 +2319,36 @@ String _formatRouteDuration(int seconds) {
   return '$hours hr $remainingMinutes min';
 }
 
+String _agendaTimeLabel(TripAgendaItemModel item) {
+  final start = item.startTime.trim();
+  final end = item.endTime.trim();
+  if (start.isNotEmpty && end.isNotEmpty) {
+    return '$start - $end';
+  }
+  if (item.visitWindow.trim().isNotEmpty) {
+    return item.visitWindow.trim();
+  }
+  if (item.timeOfDay.trim().isNotEmpty) {
+    return item.timeOfDay.trim();
+  }
+  return 'Time flexible';
+}
+
+String _googleMapsUrlForAgendaItem(TripAgendaItemModel item) {
+  final latitude = item.latitude;
+  final longitude = item.longitude;
+  final queryParts = [
+    if (item.title.trim().isNotEmpty) item.title.trim(),
+    if (item.address.trim().isNotEmpty) item.address.trim(),
+    if (latitude != null && longitude != null) '${latitude.toStringAsFixed(6)},${longitude.toStringAsFixed(6)}',
+  ];
+  final query = queryParts.isEmpty ? 'Google Maps' : queryParts.join(' ');
+  return Uri.https('www.google.com', '/maps/search/', {'api': '1', 'query': query}).toString();
+}
+
 String _routeSourceLabel(WalkingRouteModel route) {
-  final provider = route.provider == 'google-routes'
-      ? 'Google Routes'
-      : route.provider;
-  final mode = route.transitModes.isEmpty
-      ? route.travelMode
-      : '${route.travelMode} ${route.transitModes.join('/')}';
+  final provider = route.provider == 'google-routes' ? 'Google Routes' : route.provider;
+  final mode = route.transitModes.isEmpty ? route.travelMode : '${route.travelMode} ${route.transitModes.join('/')}';
   return '$provider $mode';
 }
 
@@ -2169,12 +2364,7 @@ Color _colorFromHex(String hex, {required Color fallback}) {
   return Color(0xff000000 | value);
 }
 
-double _initialRouteZoom(
-  double startLatitude,
-  double startLongitude,
-  double endLatitude,
-  double endLongitude,
-) {
+double _initialRouteZoom(double startLatitude, double startLongitude, double endLatitude, double endLongitude) {
   final latDelta = (startLatitude - endLatitude).abs();
   final lngDelta = (startLongitude - endLongitude).abs();
   final span = latDelta > lngDelta ? latDelta : lngDelta;
@@ -2198,19 +2388,6 @@ String _shortDateLabel(String value) {
   if (parsed == null) {
     return value;
   }
-  const months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   return '${parsed.day} ${months[parsed.month - 1]}';
 }

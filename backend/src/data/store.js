@@ -1,3 +1,10 @@
+/**
+ * Lightweight application data store.
+ *
+ * This file is the backend's simple data layer. It keeps trips/users in memory,
+ * persists trips to `backend/.data/trips.json`, creates generated trip IDs, and
+ * exposes CRUD helper functions used by the route modules.
+ */
 const legacySeedTrips = [
   {
     id: "trip_001",

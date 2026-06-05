@@ -1,3 +1,10 @@
+/**
+ * Trip summary controller.
+ *
+ * This file handles requests for the combined trip summary endpoint. It reads
+ * the trip ID and query parameters, passes them to `summaryService`, and returns
+ * one aggregated JSON response to the Flutter app.
+ */
 const summaryService = require("../services/summaryService");
 
 /**
@@ -15,6 +22,9 @@ async function getTripSummary(req, res, next) {
       req.query.recommendationLimits,
     );
     const routeMapDays = parseRouteMapDays(req.query.routeMapDays);
+    const routeMapDayIndexes = parseRouteMapDayIndexes(
+      req.query.routeMapDayIndexes,
+    );
     const availabilityDays = parseAvailabilityDays(req.query.availabilityDays);
 
     const summaryData = await summaryService.generateSummary(
@@ -25,6 +35,7 @@ async function getTripSummary(req, res, next) {
         recommendationLimit,
         recommendationLimits,
         routeMapDays,
+        routeMapDayIndexes,
         availabilityDays,
       },
     );
@@ -70,9 +81,20 @@ function parseRecommendationLimits(value) {
 function parseRouteMapDays(value) {
   const parsed = Number(value);
   if (!Number.isInteger(parsed)) {
-    return 1;
+    return 0;
   }
-  return Math.min(Math.max(parsed, 0), 7);
+  return Math.min(Math.max(parsed, 0), 21);
+}
+
+function parseRouteMapDayIndexes(value) {
+  if (Array.isArray(value)) {
+    return value.flatMap(parseRouteMapDayIndexes);
+  }
+
+  return String(value ?? "")
+    .split(",")
+    .map((item) => Number(item.trim()))
+    .filter((item) => Number.isInteger(item) && item >= 0 && item < 21);
 }
 
 function parseAvailabilityDays(value) {

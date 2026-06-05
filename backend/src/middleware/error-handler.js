@@ -1,3 +1,10 @@
+/**
+ * Generic fallback/error middleware.
+ *
+ * This file provides a 404 handler for unmatched routes and a simple
+ * `HttpError`-aware error handler. `server.js` uses the not-found handler after
+ * all routes are mounted.
+ */
 const { HttpError } = require("../lib/http");
 
 function notFoundHandler(req, res) {

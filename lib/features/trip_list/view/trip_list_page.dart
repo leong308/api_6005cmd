@@ -183,22 +183,6 @@ class _TripListHeader extends StatelessWidget {
                   context,
                 ).textTheme.titleLarge?.copyWith(fontSize: 24),
               ),
-              const SizedBox(height: 2),
-              Text(
-                'Trip is the parent record. Search and filter to inspect modules quickly.',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: AppPalette.inkA(0.62)),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Data: TripListDataSource   •   Model: TripListItemModel   •   View: TripListPage',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.56)),
-              ),
             ],
           ),
         ),

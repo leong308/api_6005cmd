@@ -1,3 +1,12 @@
+/**
+ * Foursquare recommendation service.
+ *
+ * This file is the primary recommendation provider for nearby attractions,
+ * food, shops, and other trip preference categories. If Foursquare fails because
+ * of quota, missing API keys, timeouts, or empty results, it automatically uses
+ * Geoapify Places so the backend keeps returning usable data.
+ */
+const geoapifyService = require("./geoapifyService");
 const { HttpError } = require("../lib/http");
 
 const FOURSQUARE_SEARCH_URL =
@@ -12,6 +21,9 @@ const FOURSQUARE_TIMEOUT_MS = Number(process.env.FOURSQUARE_TIMEOUT_MS || 10000)
 
 const cache = new Map();
 
+/**
+ * Builds the cache key for a Foursquare or fallback recommendation lookup.
+ */
 function cacheKey(latitude, longitude, preference, limit, openAt) {
   return [
     latitude.toFixed(4),
@@ -22,6 +34,9 @@ function cacheKey(latitude, longitude, preference, limit, openAt) {
   ].join(",");
 }
 
+/**
+ * Reads the Foursquare API key from environment variables.
+ */
 function readApiKey() {
   const apiKey = process.env.FOURSQUARE_API_KEY;
   if (!apiKey || apiKey.trim().length === 0 || apiKey.startsWith("your_")) {
@@ -33,6 +48,9 @@ function readApiKey() {
   return apiKey.trim();
 }
 
+/**
+ * Validates coordinates before any external lookup starts.
+ */
 function validateCoordinates(latitude, longitude) {
   if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
     throw new HttpError(400, "Latitude must be a valid number between -90 and 90.");
@@ -45,6 +63,11 @@ function validateCoordinates(latitude, longitude) {
   }
 }
 
+/**
+ * Fetches recommendations for one preference.
+ * Foursquare is tried first; if it fails or returns no venues, the backup
+ * service returns Geoapify Places fallback recommendations.
+ */
 async function fetchRecommendations({
   latitude,
   longitude,
@@ -68,42 +91,73 @@ async function fetchRecommendations({
     return cached.data;
   }
 
-  const apiKey = readApiKey();
-  let response = await requestFoursquare({
-    apiKey,
-    latitude,
-    longitude,
-    preference: normalizedPreference,
-    limit: normalizedLimit,
-    openAt: normalizeOpenAt(openAt),
-    authMode: process.env.FOURSQUARE_AUTH_SCHEME?.toLowerCase(),
-  });
-  if (
-    response.status === 401 &&
-    !process.env.FOURSQUARE_AUTH_SCHEME
-  ) {
-    response = await requestFoursquare({
+  try {
+    const apiKey = readApiKey();
+    let response = await requestFoursquare({
       apiKey,
       latitude,
       longitude,
       preference: normalizedPreference,
       limit: normalizedLimit,
       openAt: normalizeOpenAt(openAt),
-      authMode: "raw",
+      authMode: process.env.FOURSQUARE_AUTH_SCHEME?.toLowerCase(),
     });
+    if (
+      response.status === 401 &&
+      !process.env.FOURSQUARE_AUTH_SCHEME
+    ) {
+      response = await requestFoursquare({
+        apiKey,
+        latitude,
+        longitude,
+        preference: normalizedPreference,
+        limit: normalizedLimit,
+        openAt: normalizeOpenAt(openAt),
+        authMode: "raw",
+      });
+    }
+    const body = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const message = extractErrorMessage(body, response.status);
+      throw new HttpError(response.status, message);
+    }
+
+    const results = Array.isArray(body.results) ? body.results : [];
+    const data = results.map((place) =>
+      mapPlaceToRecommendation(place, { openAt: normalizeOpenAt(openAt) }),
+    );
+
+    if (data.length > 0) {
+      cache.set(key, {
+        data,
+        expiresAt: Date.now() + CACHE_TTL_MS,
+      });
+
+      return data;
+    }
+
+    console.error(
+      `Foursquare returned no ${normalizedPreference} results; using fallback recommendations.`,
+    );
+  } catch (error) {
+    console.error(
+      `Foursquare failed for ${normalizedPreference}; using fallback recommendations: ${error.message}`,
+    );
   }
-  const body = await response.json().catch(() => ({}));
 
-  if (!response.ok) {
-    const message = extractErrorMessage(body, response.status);
-    throw new HttpError(response.status, message);
-  }
-
-  const results = Array.isArray(body.results) ? body.results : [];
-  const data = results.map((place) =>
-    mapPlaceToRecommendation(place, { openAt: normalizeOpenAt(openAt) }),
-  );
-
+  const data = await geoapifyService.fetchGeoapifyRecommendations({
+    latitude,
+    longitude,
+    preference: normalizedPreference,
+    limit: normalizedLimit,
+    openAt: normalizeOpenAt(openAt),
+  }).catch((error) => {
+    console.error(
+      `Geoapify fallback failed for ${normalizedPreference}: ${error.message}`,
+    );
+    return [];
+  });
   cache.set(key, {
     data,
     expiresAt: Date.now() + CACHE_TTL_MS,
@@ -112,6 +166,9 @@ async function fetchRecommendations({
   return data;
 }
 
+/**
+ * Fetches grouped recommendations for all selected trip preferences.
+ */
 async function fetchRecommendationGroups({
   latitude,
   longitude,
@@ -143,6 +200,9 @@ async function fetchRecommendationGroups({
   );
 }
 
+/**
+ * Performs the raw Foursquare Places Search HTTP request.
+ */
 async function requestFoursquare({
   apiKey,
   latitude,
@@ -188,6 +248,9 @@ async function requestFoursquare({
   });
 }
 
+/**
+ * Builds the Authorization header using either Bearer or raw API key mode.
+ */
 function authHeaderValue(apiKey, authMode) {
   if (/^Bearer\s+/i.test(apiKey)) {
     return apiKey;
@@ -198,6 +261,9 @@ function authHeaderValue(apiKey, authMode) {
   return `Bearer ${apiKey}`;
 }
 
+/**
+ * Extracts the best readable error from a failed Foursquare response.
+ */
 function extractErrorMessage(body, status) {
   if (typeof body.message === "string" && body.message.trim().length > 0) {
     return body.message;
@@ -214,6 +280,9 @@ function extractErrorMessage(body, status) {
   return `Foursquare returned status ${status}.`;
 }
 
+/**
+ * Maps one Foursquare place into the app recommendation model.
+ */
 function mapPlaceToRecommendation(place, { openAt = "" } = {}) {
   const category = Array.isArray(place.categories)
     ? place.categories[0]?.name ?? "recommendation"
@@ -248,6 +317,9 @@ function mapPlaceToRecommendation(place, { openAt = "" } = {}) {
   };
 }
 
+/**
+ * Builds a readable address from Foursquare location fields.
+ */
 function addressLabel(location) {
   if (Array.isArray(location.formatted_address)) {
     return location.formatted_address.filter(Boolean).join(", ");
@@ -266,16 +338,25 @@ function addressLabel(location) {
     .join(", ");
 }
 
+/**
+ * Normalizes one preference string.
+ */
 function normalizePreference(value) {
   const text = String(value ?? "").trim().toLowerCase();
   return text.length === 0 ? "family" : text;
 }
 
+/**
+ * Normalizes Foursquare `open_at` values used for timed agenda slots.
+ */
 function normalizeOpenAt(value) {
   const text = String(value ?? "").trim().toUpperCase();
   return /^[1-7]T[0-2][0-9][0-5][0-9]$/.test(text) ? text : "";
 }
 
+/**
+ * Normalizes and de-duplicates trip preferences.
+ */
 function normalizePreferences(values) {
   const source = Array.isArray(values) ? values : [values];
   const preferences = source
@@ -285,6 +366,9 @@ function normalizePreferences(values) {
   return unique.length === 0 ? ["family"] : unique;
 }
 
+/**
+ * Chooses the limit for one preference group.
+ */
 function limitForPreference(preference, limitsByPreference, fallbackLimit) {
   const key = normalizePreference(preference);
   const limit =
@@ -294,6 +378,9 @@ function limitForPreference(preference, limitsByPreference, fallbackLimit) {
   return clampLimit(limit);
 }
 
+/**
+ * Maps app preference labels into stronger Foursquare search text.
+ */
 function queryForPreference(preference) {
   const queries = {
     adventure: "adventure attraction",
@@ -311,6 +398,9 @@ function queryForPreference(preference) {
   return queries[preference] ?? preference;
 }
 
+/**
+ * Keeps result limits within the supported range.
+ */
 function clampLimit(value) {
   const parsed = Number(value);
   if (!Number.isInteger(parsed)) {

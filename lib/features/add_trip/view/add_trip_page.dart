@@ -4,7 +4,6 @@ import 'package:api_6005cmd/app/theme/app_palette.dart';
 import 'package:api_6005cmd/features/add_trip/data/add_trip_form_data.dart';
 import 'package:api_6005cmd/features/add_trip/model/add_trip_draft_model.dart';
 import 'package:api_6005cmd/features/trip_list/data/trip_list_data_source.dart';
-import 'package:api_6005cmd/shared/view/layer_badges.dart';
 import 'package:api_6005cmd/shared/view/mac_panel.dart';
 import 'package:api_6005cmd/shared/view/osm_coordinate_picker.dart';
 import 'package:api_6005cmd/shared/view/section_header.dart';
@@ -131,14 +130,6 @@ class _AddTripPageState extends State<AddTripPage> {
       children: [
         const SectionHeader(
           title: 'Add Trip',
-          subtitle:
-              'Create a trip through POST /api/trips and open its live summary response.',
-        ),
-        const SizedBox(height: 12),
-        const LayerBadges(
-          dataLayer: 'TripListDataSource',
-          modelLayer: 'AddTripDraftModel',
-          viewLayer: 'AddTripPage',
         ),
         const SizedBox(height: 12),
         _FormReadiness(score: _completionScore),

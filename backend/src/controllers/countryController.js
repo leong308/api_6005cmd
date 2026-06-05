@@ -1,3 +1,10 @@
+/**
+ * Country controller.
+ *
+ * This file handles HTTP request/response work for country lookups. The actual
+ * provider call is kept in `countryService`, so this controller only reads route
+ * parameters, calls the service, and returns JSON.
+ */
 const countryService = require("../services/countryService");
 
 /**

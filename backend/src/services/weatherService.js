@@ -1,3 +1,10 @@
+/**
+ * Open-Meteo weather service.
+ *
+ * This file fetches current weather and daily forecasts from Open-Meteo,
+ * validates coordinates/date ranges, caches provider responses briefly, and
+ * maps weather codes into labels/icons used by the Flutter UI.
+ */
 const { HttpError } = require("../lib/http");
 
 const OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast";

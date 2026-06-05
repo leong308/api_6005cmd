@@ -1,3 +1,11 @@
+/**
+ * Trip agenda service.
+ *
+ * This file builds a timed travel plan from trip dates, weather forecasts,
+ * recommendation groups, venue availability checks, and route-map previews. It
+ * is used by the summary endpoint and `/api/trips/:id/agenda` to create a
+ * day-by-day itinerary with food/place slots and walking route data.
+ */
 const foursquareService = require("./foursquareService");
 const routeService = require("./routeService");
 
@@ -59,8 +67,8 @@ const DEFAULT_PLACE_PREFERENCES = ["culture", "nature", "shopping", "family"];
 const MAX_AGENDA_DAYS = 21;
 const DEFAULT_AVAILABILITY_DAYS = 1;
 const MAX_AVAILABILITY_DAYS = 7;
-const DEFAULT_ROUTE_MAP_DAYS = 1;
-const MAX_ROUTE_MAP_DAYS = 7;
+const DEFAULT_ROUTE_MAP_DAYS = 0;
+const MAX_ROUTE_MAP_DAYS = MAX_AGENDA_DAYS;
 const SLOT_RESULT_LIMIT = 10;
 const MAX_PARALLEL_FOURSQUARE_REQUESTS = 6;
 const MAX_PARALLEL_ROUTE_DAYS = 2;
@@ -83,6 +91,7 @@ async function buildTimedTripAgenda({
   recommendationGroups = [],
   availabilityDays = DEFAULT_AVAILABILITY_DAYS,
   routeMapDays = DEFAULT_ROUTE_MAP_DAYS,
+  routeMapDayIndexes = [],
 }) {
   const dates = tripDates(trip.startDate, trip.endDate);
   const forecastByDate = new Map(
@@ -121,12 +130,17 @@ async function buildTimedTripAgenda({
     pattern: "food - place - food - place - place - food - place",
     source: {
       weather: "open-meteo",
-      recommendations: "foursquare",
-      availability: "foursquare open_at filter",
+      recommendations: "foursquare with Geoapify Places fallback",
+      availability: "foursquare open_at filter with Geoapify fallback",
       strategy:
         "food/place rhythm + date + preference + weather rotation + capped live open-at checks",
     },
-    days: await enrichAgendaDaysWithRouteMaps({ trip, days, routeMapDays }),
+    days: await enrichAgendaDaysWithRouteMaps({
+      trip,
+      days,
+      routeMapDays,
+      routeMapDayIndexes,
+    }),
     checklist: buildChecklist(trip),
   };
 }
@@ -136,6 +150,7 @@ async function buildTripAgenda({
   dailyWeatherForecast,
   recommendationGroups,
   routeMapDays = DEFAULT_ROUTE_MAP_DAYS,
+  routeMapDayIndexes = [],
 }) {
   const dates = tripDates(trip.startDate, trip.endDate);
   const forecastByDate = new Map(
@@ -163,11 +178,16 @@ async function buildTripAgenda({
     pattern: "food - place - food - place - place - food - place",
     source: {
       weather: "open-meteo",
-      recommendations: "foursquare",
+      recommendations: "foursquare with Geoapify Places fallback",
       availability: "fallback recommendation rotation",
       strategy: "date + preference + weather rotation",
     },
-    days: await enrichAgendaDaysWithRouteMaps({ trip, days, routeMapDays }),
+    days: await enrichAgendaDaysWithRouteMaps({
+      trip,
+      days,
+      routeMapDays,
+      routeMapDayIndexes,
+    }),
     checklist: buildChecklist(trip),
   };
 }
@@ -272,20 +292,33 @@ function buildAgendaItem({ slot, recommendation, weatherNote, trip }) {
   };
 }
 
-async function enrichAgendaDaysWithRouteMaps({ trip, days, routeMapDays }) {
+async function enrichAgendaDaysWithRouteMaps({
+  trip,
+  days,
+  routeMapDays,
+  routeMapDayIndexes = [],
+}) {
   const routeMapDayLimit = clampRouteMapDays(routeMapDays);
+  const explicitRouteDays = new Set(
+    routeMapDayIndexes
+      .map((index) => Number(index))
+      .filter((index) => Number.isInteger(index) && index >= 0),
+  );
   return await mapWithConcurrencyResults(
     days,
     MAX_PARALLEL_ROUTE_DAYS,
     async (day, dayIndex) => {
-      if (dayIndex >= routeMapDayLimit) {
+      const shouldBuildRouteMap = explicitRouteDays.size > 0
+        ? explicitRouteDays.has(dayIndex)
+        : dayIndex < routeMapDayLimit;
+      if (!shouldBuildRouteMap) {
         return {
           ...day,
           routeMap: buildUnavailableRouteMap({
             trip,
             day,
             message:
-              "Route map preview is generated for the selected demo day to keep live API calls responsive.",
+              "Press Get route for this day to generate its walking route map.",
           }),
         };
       }

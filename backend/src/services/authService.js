@@ -1,3 +1,9 @@
+/**
+ * Authentication service.
+ *
+ * This file centralizes security helpers for hashing passwords, comparing login
+ * passwords, generating JWT tokens, and verifying JWT tokens.
+ */
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 

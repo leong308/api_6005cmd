@@ -1,3 +1,10 @@
+/**
+ * JWT authentication middleware.
+ *
+ * This file protects routes that require a logged-in user. It verifies the
+ * `Authorization: Bearer <token>` header and attaches the decoded user payload
+ * to `req.user` for downstream route handlers.
+ */
 const { verifyToken } = require("../services/authService");
 const { HttpError } = require("../lib/http");
 

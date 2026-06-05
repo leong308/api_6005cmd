@@ -1,3 +1,10 @@
+/**
+ * Reverse geocoding service.
+ *
+ * This file calls OpenStreetMap Nominatim to convert map coordinates into a
+ * country name/code. Add Trip and Edit Trip use it to auto-fill the destination
+ * country after a user selects a map point.
+ */
 const { HttpError } = require("../lib/http");
 const countryService = require("./countryService");
 

@@ -197,11 +197,6 @@ class _DesktopSidebar extends StatelessWidget {
                     color: AppPalette.ink,
                   ),
                 ),
-                SizedBox(height: 4),
-                Text(
-                  'Minimalist web UI (Flutter)',
-                  style: TextStyle(fontSize: 13, color: AppPalette.inkA(0.64)),
-                ),
               ],
             ),
           ),
@@ -220,13 +215,6 @@ class _DesktopSidebar extends StatelessWidget {
               }).toList(),
             ),
           ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Live API mode',
-              style: TextStyle(fontSize: 12, color: AppPalette.inkA(0.64)),
-            ),
-          ),
         ],
       ),
     );
@@ -241,78 +229,9 @@ class _MainCanvas extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _MainTopBar(section: section),
-        const SizedBox(height: 8),
-        Expanded(
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            child: KeyedSubtree(key: ValueKey(section.name), child: child),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _MainTopBar extends StatelessWidget {
-  const _MainTopBar({required this.section});
-
-  final AppSection section;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: AppPalette.whiteA(0.62),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppPalette.inkA(0.14)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.data_object_rounded, size: 13, color: AppPalette.blue),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              'Data linked by Trip ID • API integration ready',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 12.2,
-                fontWeight: FontWeight.w500,
-                color: AppPalette.inkA(0.84),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppPalette.blueA(0.14),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: AppPalette.blueA(0.3)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.layers_rounded, size: 12, color: AppPalette.blue),
-                const SizedBox(width: 5),
-                Text(
-                  section.title,
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: AppPalette.inkA(0.88),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      child: KeyedSubtree(key: ValueKey(section.name), child: child),
     );
   }
 }

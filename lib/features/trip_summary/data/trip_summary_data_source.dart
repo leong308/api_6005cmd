@@ -10,13 +10,21 @@ class TripSummaryDataSource {
   Future<TripSummaryModel?> fetchSummary(
     String tripId, {
     Map<String, int> recommendationLimits = const {},
+    int routeMapDays = 0,
+    Set<int> routeMapDayIndexes = const {},
+    int availabilityDays = 1,
   }) async {
     if (tripId.trim().isEmpty) {
       return null;
     }
 
     try {
-      final query = _summaryQuery(recommendationLimits);
+      final query = _summaryQuery(
+        recommendationLimits: recommendationLimits,
+        routeMapDays: routeMapDays,
+        routeMapDayIndexes: routeMapDayIndexes,
+        availabilityDays: availabilityDays,
+      );
       final response = await tripDataSource.apiClient.getJson(
         '/trips/$tripId/summary$query',
       );
@@ -71,19 +79,35 @@ class TripSummaryDataSource {
   }
 }
 
-String _summaryQuery(Map<String, int> recommendationLimits) {
+String _summaryQuery({
+  required Map<String, int> recommendationLimits,
+  required int routeMapDays,
+  required Set<int> routeMapDayIndexes,
+  required int availabilityDays,
+}) {
   final safeLimits = recommendationLimits.entries
       .where((entry) => [3, 5, 10].contains(entry.value))
       .map((entry) => MapEntry(entry.key.trim().toLowerCase(), entry.value))
       .where((entry) => entry.key.isNotEmpty)
       .toList();
-
-  if (safeLimits.isEmpty) {
-    return '';
+  final queryParameters = <String, String>{
+    'routeMapDays': routeMapDays.clamp(0, 21).toString(),
+    'availabilityDays': availabilityDays.clamp(0, 7).toString(),
+  };
+  final safeRouteDayIndexes = routeMapDayIndexes
+      .where((index) => index >= 0 && index < 21)
+      .toList()
+    ..sort();
+  if (safeRouteDayIndexes.isNotEmpty) {
+    queryParameters['routeMapDayIndexes'] = safeRouteDayIndexes.join(',');
   }
 
-  final serialized = safeLimits
-      .map((entry) => '${entry.key}:${entry.value}')
-      .join(',');
-  return '?recommendationLimits=${Uri.encodeQueryComponent(serialized)}';
+  if (safeLimits.isNotEmpty) {
+    final serialized = safeLimits
+        .map((entry) => '${entry.key}:${entry.value}')
+        .join(',');
+    queryParameters['recommendationLimits'] = serialized;
+  }
+
+  return '?${Uri(queryParameters: queryParameters).query}';
 }

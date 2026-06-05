@@ -1,3 +1,9 @@
+/**
+ * Authentication routes.
+ *
+ * This file defines optional account endpoints for register, login, and profile
+ * lookup. Password hashing and token logic are delegated to `authService`.
+ */
 const express = require("express");
 const { HttpError, assertRequiredFields } = require("../lib/http");
 const { getUserByEmail, getUserById, createUser } = require("../data/store");

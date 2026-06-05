@@ -2,7 +2,6 @@ import 'package:api_6005cmd/app/theme/app_palette.dart';
 import 'package:api_6005cmd/core/api/api_config.dart';
 import 'package:api_6005cmd/features/api_demo/data/api_demo_data_source.dart';
 import 'package:api_6005cmd/features/api_demo/model/api_endpoint_model.dart';
-import 'package:api_6005cmd/shared/view/layer_badges.dart';
 import 'package:api_6005cmd/shared/view/mac_panel.dart';
 import 'package:api_6005cmd/shared/view/section_header.dart';
 import 'package:flutter/material.dart';
@@ -23,14 +22,6 @@ class ApiDemoPage extends StatelessWidget {
       children: [
         const SectionHeader(
           title: 'Testing / API Demo',
-          subtitle:
-              'Interactive endpoint catalog for Postman testing across CRUD, external APIs, and summary output.',
-        ),
-        const SizedBox(height: 12),
-        const LayerBadges(
-          dataLayer: 'ApiDemoDataSource',
-          modelLayer: 'ApiEndpointModel',
-          viewLayer: 'ApiDemoPage',
         ),
         const SizedBox(height: 16),
         Expanded(

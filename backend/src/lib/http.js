@@ -1,3 +1,9 @@
+/**
+ * Shared HTTP helper utilities.
+ *
+ * This file defines the reusable `HttpError` class and request-body validation
+ * helper used by controllers, services, middleware, and route modules.
+ */
 class HttpError extends Error {
   constructor(statusCode, message, details = null) {
     super(message);
@@ -12,9 +18,7 @@ function assertRequiredFields(payload, requiredFields) {
   for (const field of requiredFields) {
     if (
       !Object.prototype.hasOwnProperty.call(payload, field) ||
-      payload[field] === null ||
-      payload[field] === undefined ||
-      payload[field] === ""
+      isBlankValue(payload[field])
     ) {
       missing.push(field);
     }
@@ -25,7 +29,32 @@ function assertRequiredFields(payload, requiredFields) {
   }
 }
 
+function assertProvidedFieldsNotEmpty(payload, fields) {
+  const empty = [];
+  for (const field of fields) {
+    if (
+      Object.prototype.hasOwnProperty.call(payload, field) &&
+      isBlankValue(payload[field])
+    ) {
+      empty.push(field);
+    }
+  }
+
+  if (empty.length > 0) {
+    throw new HttpError(400, "Fields cannot be empty.", { empty });
+  }
+}
+
+function isBlankValue(value) {
+  return (
+    value === null ||
+    value === undefined ||
+    (typeof value === "string" && value.trim() === "")
+  );
+}
+
 module.exports = {
   HttpError,
+  assertProvidedFieldsNotEmpty,
   assertRequiredFields,
 };

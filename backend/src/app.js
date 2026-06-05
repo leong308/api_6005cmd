@@ -1,3 +1,11 @@
+/**
+ * Express app factory.
+ *
+ * This file creates the backend application instance, applies app-level
+ * middleware, exposes a root status endpoint, and mounts the complete API
+ * router under `/api`. The server listener stays in `server.js`, so this file
+ * only describes how requests are handled once Express receives them.
+ */
 const express = require("express");
 const cors = require("cors");
 const { env } = require("./config/env");

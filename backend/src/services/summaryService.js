@@ -1,7 +1,15 @@
+/**
+ * Trip summary aggregation service.
+ *
+ * This file combines local trip data with weather, forecast, places,
+ * recommendation, country, and agenda modules into one response for
+ * `GET /api/trips/:id/summary`.
+ */
 const { getTripById } = require("../data/store");
 const agendaService = require("./agendaService");
 const countryService = require("./countryService");
 const foursquareService = require("./foursquareService");
+const reverseGeocodeService = require("./reverseGeocodeService");
 const weatherService = require("./weatherService");
 const { HttpError } = require("../lib/http");
 
@@ -18,6 +26,7 @@ async function generateSummary(tripId, host, scheme, options = {}) {
   const { latitude, longitude, destinationCountry, preferences } = trip;
   const recommendationLimit = options.recommendationLimit ?? 5;
   const recommendationLimits = options.recommendationLimits ?? {};
+  const resolvedDestinationCountryPromise = resolveDestinationCountry(trip);
   const preference =
     Array.isArray(preferences) && preferences.length > 0
       ? preferences[0]
@@ -85,7 +94,10 @@ async function generateSummary(tripId, host, scheme, options = {}) {
 
   const countryInfoPromise = (async () => {
     try {
-      const data = await countryService.fetchCountryData(destinationCountry);
+      const resolvedDestinationCountry = await resolvedDestinationCountryPromise;
+      const data = await countryService.fetchCountryData(
+        resolvedDestinationCountry,
+      );
       return data;
     } catch (err) {
       console.error(`Graceful partial failure: Country service failed - ${err.message}`);
@@ -100,38 +112,47 @@ async function generateSummary(tripId, host, scheme, options = {}) {
     googlePlaces,
     recommendationGroups,
     countryInfo,
+    resolvedDestinationCountry,
   ] = await Promise.all([
     weatherPromise,
     dailyWeatherForecastPromise,
     googlePlacesPromise,
     recommendationGroupsPromise,
     countryInfoPromise,
+    resolvedDestinationCountryPromise,
   ]);
   const recommendations = recommendationGroups.flatMap(
     (group) => group.recommendations,
   );
+  const responseTrip =
+    String(destinationCountry ?? "").trim().length > 0 ||
+    resolvedDestinationCountry.length === 0
+      ? trip
+      : { ...trip, destinationCountry: resolvedDestinationCountry };
   let tripAgenda;
   try {
     tripAgenda = await agendaService.buildTimedTripAgenda({
-      trip,
+      trip: responseTrip,
       dailyWeatherForecast,
       recommendationGroups,
       availabilityDays: options.availabilityDays,
       routeMapDays: options.routeMapDays,
+      routeMapDayIndexes: options.routeMapDayIndexes,
     });
   } catch (err) {
     console.error(`Graceful partial failure: Timed agenda failed - ${err.message}`);
     tripAgenda = await agendaService.buildTripAgenda({
-      trip,
+      trip: responseTrip,
       dailyWeatherForecast,
       recommendationGroups,
       availabilityDays: options.availabilityDays,
       routeMapDays: options.routeMapDays,
+      routeMapDayIndexes: options.routeMapDayIndexes,
     });
   }
 
   return {
-    trip,
+    trip: responseTrip,
     weather,
     dailyWeatherForecast,
     googlePlaces,
@@ -150,6 +171,24 @@ async function generateSummary(tripId, host, scheme, options = {}) {
 module.exports = {
   generateSummary,
 };
+
+async function resolveDestinationCountry(trip) {
+  const storedCountry = String(trip.destinationCountry ?? "").trim();
+  if (storedCountry.length > 0) {
+    return storedCountry;
+  }
+
+  try {
+    const result = await reverseGeocodeService.reverseGeocode(
+      Number(trip.latitude),
+      Number(trip.longitude),
+    );
+    return String(result.country ?? "").trim();
+  } catch (err) {
+    console.error(`Graceful partial failure: Reverse geocoding failed - ${err.message}`);
+    return "";
+  }
+}
 
 function buildUnavailableDailyWeatherForecast(trip, message) {
   return {

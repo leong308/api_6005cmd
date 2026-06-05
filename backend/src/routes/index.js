@@ -1,3 +1,10 @@
+/**
+ * Main API router registry.
+ *
+ * This file groups every feature router under the `/api` prefix mounted in
+ * `app.js`. It is the backend routing table for trips, summary aggregation,
+ * authentication, external proxy APIs, countries, and health checks.
+ */
 const express = require("express");
 const { healthRouter } = require("./health.routes");
 const { tripRouter } = require("./trips.routes");

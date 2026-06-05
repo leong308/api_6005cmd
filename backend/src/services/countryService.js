@@ -1,3 +1,9 @@
+/**
+ * REST Countries service.
+ *
+ * This file calls the REST Countries API and maps its large response into the
+ * smaller country detail shape used by the trip summary and country endpoints.
+ */
 const { HttpError } = require("../lib/http");
 
 /**
