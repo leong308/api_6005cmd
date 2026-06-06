@@ -7,6 +7,7 @@
  */
 const { HttpError } = require("../lib/http");
 const countryService = require("./countryService");
+const geoapifyService = require("./geoapifyService");
 
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/reverse";
 const USER_AGENT =
@@ -38,6 +39,52 @@ async function reverseGeocode(latitude, longitude) {
     return cache.get(key);
   }
 
+  try {
+    const geoapifyResult = await geoapifyService.fetchCountryByCoordinates(
+      latitude,
+      longitude,
+    );
+    const normalizedGeoapifyResult = normalizeResult({
+      ...geoapifyResult,
+      latitude,
+      longitude,
+    });
+    if (
+      normalizedGeoapifyResult.country.length > 0 ||
+      normalizedGeoapifyResult.countryCode.length > 0
+    ) {
+      cache.set(key, normalizedGeoapifyResult);
+      return normalizedGeoapifyResult;
+    }
+    console.warn("Geoapify country lookup returned no country.");
+  } catch (error) {
+    console.warn(`Geoapify country lookup failed: ${error.message}`);
+  }
+
+  try {
+    const nominatimResult = await reverseGeocodeWithNominatim(
+      latitude,
+      longitude,
+    );
+    cache.set(key, nominatimResult);
+    return nominatimResult;
+  } catch (error) {
+    console.warn(`Nominatim country lookup failed: ${error.message}`);
+    const unavailableResult = {
+      country: "",
+      countryCode: "",
+      displayName: "",
+      latitude,
+      longitude,
+      source: "unavailable",
+      warning: "Country lookup is temporarily unavailable.",
+    };
+    cache.set(key, unavailableResult);
+    return unavailableResult;
+  }
+}
+
+async function reverseGeocodeWithNominatim(latitude, longitude) {
   await waitForRateLimit();
 
   const url = new URL(NOMINATIM_URL);
@@ -69,16 +116,14 @@ async function reverseGeocode(latitude, longitude) {
     ? String(address.country_code).toUpperCase()
     : "";
   const englishCountry = await englishCountryName(countryCode, address.country);
-  const result = {
+  return normalizeResult({
     country: englishCountry,
     countryCode,
     displayName: data.display_name ?? "",
     latitude,
     longitude,
-  };
-
-  cache.set(key, result);
-  return result;
+    source: "nominatim",
+  });
 }
 
 async function englishCountryName(countryCode, fallback) {
@@ -94,6 +139,18 @@ async function englishCountryName(countryCode, fallback) {
     );
     return fallback ?? "";
   }
+}
+
+function normalizeResult(result) {
+  return {
+    country: String(result.country ?? "").trim(),
+    countryCode: String(result.countryCode ?? "").trim().toUpperCase(),
+    displayName: String(result.displayName ?? "").trim(),
+    latitude: Number(result.latitude),
+    longitude: Number(result.longitude),
+    source: String(result.source ?? "").trim() || "unknown",
+    ...(result.warning ? { warning: String(result.warning) } : {}),
+  };
 }
 
 module.exports = {

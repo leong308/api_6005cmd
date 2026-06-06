@@ -8,17 +8,66 @@
  * the Flutter UI.
  */
 const { HttpError } = require("../lib/http");
+const cacheRepository = require("../data/cacheRepository");
 
 const GEOAPIFY_PLACES_URL =
   process.env.GEOAPIFY_PLACES_URL || "https://api.geoapify.com/v2/places";
+const GEOAPIFY_REVERSE_GEOCODING_URL =
+  process.env.GEOAPIFY_REVERSE_GEOCODING_URL ||
+  "https://api.geoapify.com/v1/geocode/reverse";
 const GEOAPIFY_RADIUS_METERS = Number(
   process.env.GEOAPIFY_RADIUS_METERS || 8000,
 );
 const GEOAPIFY_TIMEOUT_MS = Number(process.env.GEOAPIFY_TIMEOUT_MS || 12000);
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_LIMIT = 5;
+const COUNTRY_CACHE_NAMESPACE = "geoapify_reverse_country";
+const COUNTRY_CACHE_PRECISION = readCountryCachePrecision();
 
 const cache = new Map();
+const countryCache = new Map();
+
+async function fetchCountryByCoordinates(latitude, longitude) {
+  validateCoordinates(latitude, longitude);
+
+  const key = countryCacheKey(latitude, longitude);
+  if (countryCache.has(key)) {
+    return countryCache.get(key);
+  }
+
+  const persistentCached = await cacheRepository.getCachedValue(
+    COUNTRY_CACHE_NAMESPACE,
+    key,
+  );
+  if (persistentCached !== undefined) {
+    countryCache.set(key, persistentCached);
+    return persistentCached;
+  }
+
+  const url = buildReverseGeocodeUrl({ latitude, longitude });
+  const response = await fetch(url, {
+    signal: AbortSignal.timeout(GEOAPIFY_TIMEOUT_MS),
+  });
+  const body = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new HttpError(
+      response.status || 502,
+      extractGeoapifyError(body, response.status),
+    );
+  }
+
+  const data = mapReverseGeocodeCountry(body, { latitude, longitude });
+  countryCache.set(key, data);
+  await cacheRepository.setCachedValue(COUNTRY_CACHE_NAMESPACE, key, data, {
+    metadata: {
+      provider: "geoapify-reverse-geocoding",
+      precision: COUNTRY_CACHE_PRECISION,
+    },
+  });
+
+  return data;
+}
 
 /**
  * Fetches backup recommendations for one preference near the trip coordinates.
@@ -138,6 +187,58 @@ function buildPlacesUrl({ latitude, longitude, preference, limit }) {
   return url;
 }
 
+function buildReverseGeocodeUrl({ latitude, longitude }) {
+  const url = new URL(GEOAPIFY_REVERSE_GEOCODING_URL);
+  url.searchParams.set("lat", latitude);
+  url.searchParams.set("lon", longitude);
+  url.searchParams.set("type", "country");
+  url.searchParams.set("format", "json");
+  url.searchParams.set("lang", "en");
+  url.searchParams.set("apiKey", readApiKey());
+  return url;
+}
+
+function mapReverseGeocodeCountry(body, { latitude, longitude }) {
+  const result = firstReverseGeocodeResult(body);
+  const country = String(
+    result.country ??
+      result.country_name ??
+      result.name ??
+      result.address?.country ??
+      "",
+  ).trim();
+  const countryCode = String(
+    result.country_code ??
+      result.country_code_iso2 ??
+      result.iso3166_1_alpha2 ??
+      result.address?.country_code ??
+      "",
+  )
+    .trim()
+    .toUpperCase();
+
+  return {
+    country,
+    countryCode,
+    displayName: String(
+      result.formatted ?? result.address_line1 ?? result.address_line2 ?? country,
+    ),
+    latitude,
+    longitude,
+    source: "geoapify-reverse-geocoding",
+  };
+}
+
+function firstReverseGeocodeResult(body) {
+  if (Array.isArray(body.results) && body.results.length > 0) {
+    return body.results[0] ?? {};
+  }
+  if (Array.isArray(body.features) && body.features.length > 0) {
+    return body.features[0]?.properties ?? {};
+  }
+  return {};
+}
+
 /**
  * Converts one Geoapify GeoJSON feature into the app recommendation model.
  */
@@ -238,7 +339,7 @@ function readApiKey() {
   if (!apiKey || apiKey.startsWith("your_")) {
     throw new HttpError(
       503,
-      "GEOAPIFY_API_KEY is not configured for Geoapify Places fallback.",
+      "GEOAPIFY_API_KEY is not configured.",
     );
   }
   return apiKey;
@@ -255,6 +356,22 @@ function cacheKey(latitude, longitude, preference, limit, openAt) {
     limit,
     openAt || "anytime",
   ].join(",");
+}
+
+function countryCacheKey(latitude, longitude) {
+  return [
+    Number(latitude).toFixed(COUNTRY_CACHE_PRECISION),
+    Number(longitude).toFixed(COUNTRY_CACHE_PRECISION),
+    "country",
+  ].join(",");
+}
+
+function readCountryCachePrecision() {
+  const precision = Number(process.env.GEOAPIFY_COUNTRY_CACHE_PRECISION || 3);
+  if (!Number.isInteger(precision)) {
+    return 3;
+  }
+  return Math.min(Math.max(precision, 2), 5);
 }
 
 /**
@@ -359,6 +476,7 @@ function extractGeoapifyError(body, status) {
 }
 
 module.exports = {
+  fetchCountryByCoordinates,
   fetchGeoapifyRecommendations,
   fetchGeoapifyRecommendationGroups,
 };

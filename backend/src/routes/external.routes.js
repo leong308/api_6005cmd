@@ -247,7 +247,7 @@ externalRouter.get("/reverse-geocode", async (req, res, next) => {
 
     return res.json({
       success: true,
-      provider: "nominatim",
+      provider: data.source || "geoapify-with-nominatim-fallback",
       data,
     });
   } catch (error) {

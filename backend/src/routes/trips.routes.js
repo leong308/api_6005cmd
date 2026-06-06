@@ -25,7 +25,8 @@ const agendaService = require("../services/agendaService");
 const countryService = require("../services/countryService");
 const foursquareService = require("../services/foursquareService");
 const reverseGeocodeService = require("../services/reverseGeocodeService");
-const weatherService = require("../services/weatherService");
+const tripWeatherFileCache = require("../services/tripWeatherFileCache");
+const tripWeatherService = require("../services/tripWeatherService");
 
 const tripRouter = express.Router();
 const REQUIRED_TRIP_FIELDS = [
@@ -74,32 +75,16 @@ tripRouter.get("/:id/weather", async (req, res, next) => {
       throw new HttpError(404, "Trip not found.");
     }
 
-    const cacheKey = buildTripCacheKey(trip, "weather");
-    const cached = await cacheRepository.getCachedValue("trip_weather", cacheKey);
-    if (cached !== undefined) {
-      return res.json({
-        success: true,
-        provider: "open-meteo",
-        tripId: req.params.id,
-        cached: true,
-        data: cached,
-      });
-    }
-
-    const data = await weatherService.fetchCurrentWeather(
-      trip.latitude,
-      trip.longitude,
-    );
-    await cacheRepository.setCachedValue("trip_weather", cacheKey, data, {
-      metadata: { tripId: trip.id, provider: "open-meteo" },
-    });
+    const result = await tripWeatherService.fetchCurrentWeatherForTrip(trip);
 
     return res.json({
       success: true,
       provider: "open-meteo",
       tripId: req.params.id,
-      cached: false,
-      data,
+      cached: result.cached,
+      stale: result.stale,
+      ...(result.warning ? { warning: result.warning } : {}),
+      data: result.data,
     });
   } catch (error) {
     return next(error);
@@ -113,37 +98,16 @@ tripRouter.get("/:id/weather/forecast", async (req, res, next) => {
       throw new HttpError(404, "Trip not found.");
     }
 
-    const cacheKey = buildTripCacheKey(trip, "forecast");
-    const cached = await cacheRepository.getCachedValue(
-      "trip_forecast",
-      cacheKey,
-    );
-    if (cached !== undefined) {
-      return res.json({
-        success: true,
-        provider: "open-meteo",
-        tripId: req.params.id,
-        cached: true,
-        data: cached,
-      });
-    }
-
-    const data = await weatherService.fetchDailyForecast(
-      trip.latitude,
-      trip.longitude,
-      trip.startDate,
-      trip.endDate,
-    );
-    await cacheRepository.setCachedValue("trip_forecast", cacheKey, data, {
-      metadata: { tripId: trip.id, provider: "open-meteo" },
-    });
+    const result = await tripWeatherService.fetchDailyForecastForTrip(trip);
 
     return res.json({
       success: true,
       provider: "open-meteo",
       tripId: req.params.id,
-      cached: false,
-      data,
+      cached: result.cached,
+      stale: result.stale,
+      ...(result.warning ? { warning: result.warning } : {}),
+      data: result.data,
     });
   } catch (error) {
     return next(error);
@@ -236,13 +200,9 @@ tripRouter.get("/:id/agenda", async (req, res, next) => {
     }
 
     const [dailyWeatherForecast, recommendationGroups] = await Promise.all([
-      weatherService
-        .fetchDailyForecast(
-          trip.latitude,
-          trip.longitude,
-          trip.startDate,
-          trip.endDate,
-        )
+      tripWeatherService
+        .fetchDailyForecastForTrip(trip)
+        .then((result) => result.data)
         .catch(() => null),
       foursquareService
         .fetchRecommendationGroups({
@@ -354,6 +314,7 @@ tripRouter.delete("/:id", async (req, res, next) => {
     if (!deleted) {
       throw new HttpError(404, "Trip not found.");
     }
+    await tripWeatherFileCache.deleteTripWeatherCache(req.params.id);
 
     res.json({
       success: true,

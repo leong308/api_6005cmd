@@ -32,6 +32,12 @@ FIREBASE_AUTH_REQUEST_TIMEOUT_MS=10000
 EMAIL_VERIFICATION_EXPIRES_IN_MS=7200000
 PASSWORD_RESET_EXPIRES_IN_MS=7200000
 UNVERIFIED_ACCOUNT_CLEANUP_INTERVAL_MS=600000
+GEOAPIFY_API_KEY=your_geoapify_api_key_here
+GEOAPIFY_COUNTRY_CACHE_PRECISION=3
+GEOAPIFY_TIMEOUT_MS=12000
+NOMINATIM_USER_AGENT=SmartTripPlanner/1.0 (your-email@example.com)
+TRIP_CURRENT_WEATHER_CACHE_TTL_MS=1800000
+TRIP_DAILY_FORECAST_CACHE_TTL_MS=21600000
 ```
 
 4. API base URL:
@@ -52,6 +58,12 @@ PUBLIC_APP_BASE_URL=https://smart-trip-planner.web.app
 EMAIL_PROVIDER=firebase
 FIREBASE_AUTH_API_KEY=<your_firebase_web_api_key>
 FIREBASE_AUTH_REQUEST_TIMEOUT_MS=10000
+GEOAPIFY_API_KEY=<your_geoapify_api_key>
+GEOAPIFY_COUNTRY_CACHE_PRECISION=3
+GEOAPIFY_TIMEOUT_MS=12000
+NOMINATIM_USER_AGENT=SmartTripPlanner/1.0 (your-email@example.com)
+TRIP_CURRENT_WEATHER_CACHE_TTL_MS=1800000
+TRIP_DAILY_FORECAST_CACHE_TTL_MS=21600000
 ```
 
 Do not set `PORT`, `NODE_ENV=development`, or SMTP variables on Render Free.
@@ -96,7 +108,7 @@ web API key is in Firebase Console → Project settings → General → Web API 
 - Trip and auth data use MongoDB when `MONGO_URI` is configured. Without `MONGO_URI`, the backend falls back to local development storage in `backend/.data/trips.json`.
 - MongoDB collections used by the backend are `trips`, `users`, and `api_cache`.
 - Users are stored in the `users` collection. Trips are stored in the `trips` collection with `ownerUserId`, so each logged-in account only sees its own trips and summaries.
-- Trip summaries, trip weather/forecast/country/agenda responses, and recommendation lookups read MongoDB cache first. External APIs are called only when the cache does not already contain matching data.
+- Trip summaries, country lookups, agenda responses, and recommendation lookups read cache before provider calls. Trip weather/current forecast data also writes one JSON cache file per trip under `backend/.data/weather-cache`.
 - Auth uses bcrypt password hashes, email verification, and JWT bearer tokens. Register first, open the verification link, then log in. Send the returned token as `Authorization: Bearer <token>` for all `/api/trips/*`, `/api/trips/:id/summary`, and `/api/auth/profile` requests.
 - `JWT_SECRET` must be configured for real deployments. Production startup fails if it is missing, rather than silently signing tokens with a placeholder secret.
 - Email verification links expire after 2 hours by default. Unverified accounts whose verification link has expired are automatically deleted by the backend cleanup job.
@@ -104,7 +116,8 @@ web API key is in Firebase Console → Project settings → General → Web API 
 - The `users.firstLogin` flag is stored in the database. Login returns it to Flutter, and `POST /api/auth/complete-tour` flips it to `false` after the one-time app tour completes.
 - Email verification and password reset emails use `EMAIL_PROVIDER=firebase` by default. Firebase Authentication sends the emails over HTTPS, so it works on Render Free and does not require owning a sender domain. Enable Email/Password in Firebase Authentication and set `FIREBASE_AUTH_API_KEY`.
 - Resend is still supported with `EMAIL_PROVIDER=resend` and `RESEND_API_KEY`, but it requires a verified sender domain before sending to arbitrary recipients. SMTP is also supported with `EMAIL_PROVIDER=smtp`, but do not use SMTP on Render Free. In non-production, non-Firebase delivery failures return `devVerificationUrl` or `devResetUrl` instead of blocking signup/reset.
-- `GET /api/external/weather`, `GET /api/external/weather/forecast`, `GET /api/trips/:id/weather`, and `GET /api/trips/:id/weather/forecast` use live Open-Meteo data and do not require an API key.
+- `GET /api/external/reverse-geocode` uses Geoapify reverse geocoding first, caches rounded coordinates to avoid repeated credit use, and falls back without failing the request when providers are unavailable.
+- `GET /api/external/weather`, `GET /api/external/weather/forecast`, `GET /api/trips/:id/weather`, and `GET /api/trips/:id/weather/forecast` use Open-Meteo data and do not require an API key. Trip-specific weather endpoints use one-file-per-trip cache.
 - `GET /api/external/recommendations` and `GET /api/trips/:id/recommendations` use live Foursquare Places data when `FOURSQUARE_API_KEY` is configured in `backend/.env`.
 - `GET /api/trips/:id/agenda` builds a timed food/place tour-guide agenda from trip dates, Open-Meteo forecast, Foursquare recommendation groups, Foursquare `open_at` checks, and Google Routes walking paths. Use `availabilityDays=1..7` and `routeMapDays=1..7` to increase live open-at and route-map coverage for demos.
 - `GET /api/external/route` uses Google Maps Routes API when `GOOGLE_ROUTES_API_KEY` is configured in `backend/.env`. Pass `mode=walk` for walking routes or `mode=car` / `mode=vehicle` for Vehicle routes. Vehicle uses Google Routes `DRIVE`.

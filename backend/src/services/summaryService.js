@@ -11,7 +11,7 @@ const agendaService = require("./agendaService");
 const countryService = require("./countryService");
 const foursquareService = require("./foursquareService");
 const reverseGeocodeService = require("./reverseGeocodeService");
-const weatherService = require("./weatherService");
+const tripWeatherService = require("./tripWeatherService");
 const { HttpError } = require("../lib/http");
 
 /**
@@ -51,12 +51,8 @@ async function generateSummary(tripId, host, scheme, options = {}) {
   // Individual isolated protection blocks to allow graceful partial failures
   const weatherPromise = (async () => {
     try {
-      const response = await fetch(`${scheme}://${host}/api/external/weather?lat=${latitude}&lng=${longitude}`);
-      if (!response.ok) {
-        throw new Error(`Proxy weather returned status ${response.status}`);
-      }
-      const json = await response.json();
-      return json.data;
+      const result = await tripWeatherService.fetchCurrentWeatherForTrip(trip);
+      return result.data;
     } catch (err) {
       console.error(`Graceful partial failure: Open-Meteo failed - ${err.message}`);
       return null;
@@ -65,12 +61,8 @@ async function generateSummary(tripId, host, scheme, options = {}) {
 
   const dailyWeatherForecastPromise = (async () => {
     try {
-      return await weatherService.fetchDailyForecast(
-        latitude,
-        longitude,
-        trip.startDate,
-        trip.endDate,
-      );
+      const result = await tripWeatherService.fetchDailyForecastForTrip(trip);
+      return result.data;
     } catch (err) {
       console.error(`Graceful partial failure: Open-Meteo daily forecast failed - ${err.message}`);
       return buildUnavailableDailyWeatherForecast(trip, err.message);
