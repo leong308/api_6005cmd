@@ -31,6 +31,14 @@ const {
   sendVerificationEmail,
 } = require("../services/emailService");
 const {
+  createFirebaseUser,
+  lookupFirebaseUser,
+  sendFirebaseEmailVerification,
+  sendFirebasePasswordReset,
+  shouldUseFirebaseAuthEmail,
+  signInFirebaseUser,
+} = require("../services/firebaseAuthService");
+const {
   cleanupExpiredUnverifiedUsers,
 } = require("../services/unverifiedUserCleanupService");
 const { authMiddleware } = require("../middleware/authMiddleware");
@@ -51,32 +59,59 @@ authRouter.post("/register", async (req, res, next) => {
       throw new HttpError(409, "Email already exists.");
     }
 
+    const password = String(req.body.password);
+    const email = String(req.body.email);
+    const name = String(req.body.name);
+
     // Hash the password before storing
-    const hashedPassword = await hashPassword(String(req.body.password));
+    const hashedPassword = await hashPassword(password);
     const verification = createEmailVerificationToken();
+    const useFirebaseEmail = shouldUseFirebaseAuthEmail();
+    const firebaseAccount = useFirebaseEmail
+      ? await createFirebaseAuthAccount({ email, password })
+      : null;
+    const firebaseProfile = firebaseAccount
+      ? await lookupFirebaseUser(firebaseAccount.idToken)
+      : null;
+    const emailVerified = Boolean(firebaseProfile?.emailVerified);
 
     const user = await createUser({
-      name: req.body.name,
-      email: req.body.email,
+      name,
+      email,
       password: hashedPassword,
-      emailVerified: false,
-      emailVerificationTokenHash: verification.tokenHash,
+      emailVerified,
+      emailVerifiedAt: emailVerified ? new Date().toISOString() : null,
+      emailVerificationProvider: useFirebaseEmail ? "firebase" : "email",
+      firebaseLocalId: firebaseAccount?.localId ?? null,
+      emailVerificationTokenHash: useFirebaseEmail ? null : verification.tokenHash,
       emailVerificationExpiresAt: verification.expiresAt,
       firstLogin: true,
     });
 
-    const verificationUrl = buildVerificationUrl(req, verification.token);
-    const emailResult = await sendVerificationEmail({
-      to: user.email,
-      name: user.name,
-      verificationUrl,
-      expiresAt: verification.expiresAt,
-    });
+    const emailResult = useFirebaseEmail
+      ? emailVerified
+        ? {
+            delivered: true,
+            provider: "firebase",
+            expiresAt: verification.expiresAt,
+            message: "Firebase account is already verified.",
+          }
+        : {
+            ...(await sendFirebaseEmailVerification(firebaseAccount.idToken)),
+            expiresAt: verification.expiresAt,
+          }
+      : await sendVerificationEmail({
+          to: user.email,
+          name: user.name,
+          verificationUrl: buildVerificationUrl(req, verification.token),
+          expiresAt: verification.expiresAt,
+        });
 
     res.status(201).json({
       success: true,
-      message:
-        "User registered. Please verify your email before logging in.",
+      message: emailVerified
+        ? "User registered. You can now log in."
+        : "User registered. Please verify your email before logging in.",
       emailVerification: emailResult,
       data: user,
     });
@@ -145,6 +180,12 @@ authRouter.post("/resend-verification", async (req, res, next) => {
     if (user.emailVerified) {
       throw new HttpError(409, "Email is already verified.");
     }
+    if (isFirebaseAuthUser(user) && shouldUseFirebaseAuthEmail()) {
+      throw new HttpError(
+        400,
+        "Enter your email and password on the login page to resend a Firebase verification email.",
+      );
+    }
 
     const verification = createEmailVerificationToken();
     const updated = await setUserEmailVerification(user.id, verification);
@@ -174,6 +215,15 @@ authRouter.post("/forgot-password", async (req, res, next) => {
     const user = await getUserByEmail(String(req.body.email));
     if (!user || !user.emailVerified) {
       return res.json({ success: true, message });
+    }
+
+    if (isFirebaseAuthUser(user) && shouldUseFirebaseAuthEmail()) {
+      const emailResult = await sendFirebasePasswordReset(user.email);
+      return res.json({
+        success: true,
+        message,
+        passwordReset: emailResult,
+      });
     }
 
     const reset = createPasswordResetToken();
@@ -280,28 +330,24 @@ authRouter.post("/login", async (req, res, next) => {
     if (!user) {
       throw new HttpError(401, "Invalid credentials.");
     }
-    if (!user.emailVerified) {
-      throw new HttpError(403, "Please verify your email before logging in.");
-    }
 
-    // Compare password with bcrypt hash
-    const isMatch = await comparePassword(String(req.body.password), user.password);
-    if (!isMatch) {
-      throw new HttpError(401, "Invalid credentials.");
-    }
+    const authenticatedUser =
+      isFirebaseAuthUser(user) && shouldUseFirebaseAuthEmail()
+        ? await authenticateFirebaseBackedUser(user, String(req.body.password))
+        : await authenticateLocalUser(user, String(req.body.password));
 
-    const token = generateToken(user);
+    const token = generateToken(authenticatedUser);
 
     res.json({
       success: true,
       message: "Login successful.",
       token,
       data: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        emailVerified: user.emailVerified,
-        firstLogin: user.firstLogin !== false,
+        id: authenticatedUser.id,
+        name: authenticatedUser.name,
+        email: authenticatedUser.email,
+        emailVerified: authenticatedUser.emailVerified,
+        firstLogin: authenticatedUser.firstLogin !== false,
       },
     });
   } catch (error) {
@@ -358,6 +404,80 @@ authRouter.post("/complete-tour", authMiddleware, async (req, res, next) => {
 });
 
 module.exports = { authRouter };
+
+async function createFirebaseAuthAccount({ email, password }) {
+  try {
+    return await createFirebaseUser({ email, password });
+  } catch (error) {
+    if (isFirebaseError(error, "EMAIL_EXISTS")) {
+      try {
+        return await signInFirebaseUser({ email, password });
+      } catch (_signInError) {
+        throw new HttpError(
+          409,
+          "Email already exists. Use forgot password or log in with the existing password.",
+        );
+      }
+    }
+    throw error;
+  }
+}
+
+async function authenticateLocalUser(user, password) {
+  if (!user.emailVerified) {
+    throw new HttpError(403, "Please verify your email before logging in.");
+  }
+
+  const isMatch = await comparePassword(password, user.password);
+  if (!isMatch) {
+    throw new HttpError(401, "Invalid credentials.");
+  }
+
+  return user;
+}
+
+async function authenticateFirebaseBackedUser(user, password) {
+  let firebaseSession;
+  try {
+    firebaseSession = await signInFirebaseUser({
+      email: user.email,
+      password,
+    });
+  } catch (error) {
+    if (
+      isFirebaseError(error, "INVALID_LOGIN_CREDENTIALS") ||
+      isFirebaseError(error, "INVALID_PASSWORD") ||
+      isFirebaseError(error, "EMAIL_NOT_FOUND")
+    ) {
+      throw new HttpError(401, "Invalid credentials.");
+    }
+    throw error;
+  }
+
+  const firebaseUser = await lookupFirebaseUser(firebaseSession.idToken);
+  if (!firebaseUser.emailVerified) {
+    await sendFirebaseEmailVerification(firebaseSession.idToken);
+    throw new HttpError(
+      403,
+      "Please verify your email before logging in. A new verification email has been sent.",
+    );
+  }
+
+  if (!user.emailVerified) {
+    const verifiedUser = await markUserEmailVerified(user.id);
+    return verifiedUser || { ...user, emailVerified: true };
+  }
+
+  return user;
+}
+
+function isFirebaseAuthUser(user) {
+  return user?.emailVerificationProvider === "firebase";
+}
+
+function isFirebaseError(error, code) {
+  return String(error?.message ?? "").includes(code);
+}
 
 function buildVerificationUrl(req, token) {
   const configuredBase = String(process.env.PUBLIC_API_BASE_URL ?? "").trim();

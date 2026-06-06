@@ -1,109 +1,137 @@
 /**
  * Email delivery service.
  *
- * Uses SMTP settings from backend/.env. When SMTP is not configured, the
- * service logs and returns the verification link so local development can still
- * complete the signup flow.
+ * Uses a HTTPS email API when configured, which works on Render Free because it
+ * avoids blocked outbound SMTP ports. SMTP is still supported for local or paid
+ * hosting environments. In non-production, delivery failures return the action
+ * link so development can continue without real email delivery.
  */
 const nodemailer = require("nodemailer");
 
 let transporterPromise = null;
 
 async function sendVerificationEmail({ to, name, verificationUrl, expiresAt }) {
-  if (!isSmtpConfigured()) {
-    console.warn(
-      `SMTP is not configured. Development verification link for ${to}: ${verificationUrl}`,
-    );
-    return {
-      delivered: false,
-      devVerificationUrl: verificationUrl,
-      expiresAt,
-      message:
-        "SMTP is not configured. Use devVerificationUrl to verify locally.",
-    };
-  }
-
-  const transporter = await getTransporter();
-  try {
-    await transporter.sendMail({
-      from: readMailFrom(),
-      to,
-      subject: "Verify your Smart Travel Planner account",
-      text: [
-        `Hi ${name || "there"},`,
-        "",
-        "Please verify your Smart Travel Planner account by opening this link:",
-        verificationUrl,
-        "",
-        `This link expires ${formatExpiry(expiresAt)}.`,
-      ].join("\n"),
-      html: [
-        `<p>Hi ${escapeHtml(name || "there")},</p>`,
-        "<p>Please verify your Smart Travel Planner account by opening this link:</p>",
-        `<p><a href="${verificationUrl}">Verify email address</a></p>`,
-        `<p>This link expires ${escapeHtml(formatExpiry(expiresAt))}.</p>`,
-      ].join(""),
-    });
-  } catch (error) {
-    if (!shouldUseDevelopmentFallback()) {
-      throw error;
-    }
-
-    console.warn(
-      `SMTP delivery failed. Development verification link for ${to}: ${verificationUrl}. Error: ${error.message}`,
-    );
-    return {
-      delivered: false,
-      devVerificationUrl: verificationUrl,
-      expiresAt,
-      message:
-        "SMTP delivery failed. Use devVerificationUrl to verify locally.",
-      error: error.message,
-    };
-  }
-
-  return {
-    delivered: true,
+  return sendTransactionalEmail({
+    to,
+    subject: "Verify your Smart Travel Planner account",
+    text: [
+      `Hi ${name || "there"},`,
+      "",
+      "Please verify your Smart Travel Planner account by opening this link:",
+      verificationUrl,
+      "",
+      `This link expires ${formatExpiry(expiresAt)}.`,
+    ].join("\n"),
+    html: [
+      `<p>Hi ${escapeHtml(name || "there")},</p>`,
+      "<p>Please verify your Smart Travel Planner account by opening this link:</p>",
+      `<p><a href="${verificationUrl}">Verify email address</a></p>`,
+      `<p>This link expires ${escapeHtml(formatExpiry(expiresAt))}.</p>`,
+    ].join(""),
     expiresAt,
-    message: "Verification email sent.",
-  };
+    fallbackUrl: verificationUrl,
+    fallbackUrlKey: "devVerificationUrl",
+    noProviderMessage:
+      "Email provider is not configured. Use devVerificationUrl to verify locally.",
+    failureMessage:
+      "Email delivery failed. Use devVerificationUrl to verify locally.",
+    successMessage: "Verification email sent.",
+  });
 }
 
 async function sendPasswordResetEmail({ to, name, resetUrl, expiresAt }) {
-  if (!isSmtpConfigured()) {
-    console.warn(
-      `SMTP is not configured. Development password reset link for ${to}: ${resetUrl}`,
-    );
-    return {
-      delivered: false,
-      devResetUrl: resetUrl,
-      expiresAt,
-      message: "SMTP is not configured. Use devResetUrl to reset locally.",
-    };
-  }
+  return sendTransactionalEmail({
+    to,
+    subject: "Reset your Smart Travel Planner password",
+    text: [
+      `Hi ${name || "there"},`,
+      "",
+      "Open this link to reset your Smart Travel Planner password:",
+      resetUrl,
+      "",
+      `This link expires ${formatExpiry(expiresAt)}.`,
+      "If you did not request this, ignore this email.",
+    ].join("\n"),
+    html: [
+      `<p>Hi ${escapeHtml(name || "there")},</p>`,
+      "<p>Open this link to reset your Smart Travel Planner password:</p>",
+      `<p><a href="${resetUrl}">Reset password</a></p>`,
+      `<p>This link expires ${escapeHtml(formatExpiry(expiresAt))}.</p>`,
+      "<p>If you did not request this, ignore this email.</p>",
+    ].join(""),
+    expiresAt,
+    fallbackUrl: resetUrl,
+    fallbackUrlKey: "devResetUrl",
+    noProviderMessage:
+      "Email provider is not configured. Use devResetUrl to reset locally.",
+    failureMessage: "Email delivery failed. Use devResetUrl to reset locally.",
+    successMessage: "Password reset email sent.",
+  });
+}
 
-  const transporter = await getTransporter();
+async function sendTransactionalEmail({
+  to,
+  subject,
+  text,
+  html,
+  expiresAt,
+  fallbackUrl,
+  fallbackUrlKey,
+  noProviderMessage,
+  failureMessage,
+  successMessage,
+}) {
   try {
-    await transporter.sendMail({
-      from: readMailFrom(),
-      to,
-      subject: "Reset your Smart Travel Planner password",
-      text: [
-        `Hi ${name || "there"},`,
-        "",
-        "Open this link to reset your Smart Travel Planner password:",
-        resetUrl,
-        "",
-        `This link expires ${formatExpiry(expiresAt)}.`,
-        "If you did not request this, ignore this email.",
-      ].join("\n"),
-      html: [
-        `<p>Hi ${escapeHtml(name || "there")},</p>`,
-        "<p>Open this link to reset your Smart Travel Planner password:</p>",
-        `<p><a href="${resetUrl}">Reset password</a></p>`,
-        `<p>This link expires ${escapeHtml(formatExpiry(expiresAt))}.</p>`,
-        "<p>If you did not request this, ignore this email.</p>",
-      ].join(""),
+    const provider = readEmailProvider();
+
+    if (
+      provider === "resend" ||
+      (provider === "auto" && isResendConfigured())
+    ) {
+      if (!isResendConfigured()) {
+        throw new Error(
+          "Resend email provider is selected but RESEND_API_KEY is missing.",
+        );
+      }
+
+      const result = await sendWithResend({ to, subject, text, html });
+      return {
+        delivered: true,
+        provider: "resend",
+        expiresAt,
+        message: successMessage,
+        messageId: result.id,
+      };
+    }
+
+    if (provider === "smtp" || (provider === "auto" && isSmtpConfigured())) {
+      if (!isSmtpConfigured()) {
+        throw new Error(
+          "SMTP email provider is selected but SMTP settings are incomplete.",
+        );
+      }
+
+      await sendWithSmtp({ to, subject, text, html });
+      return {
+        delivered: true,
+        provider: "smtp",
+        expiresAt,
+        message: successMessage,
+      };
+    }
+
+    if (!shouldUseDevelopmentFallback()) {
+      throw new Error("Email provider is not configured.");
+    }
+
+    console.warn(
+      `Email provider is not configured. Development link for ${to}: ${fallbackUrl}`,
+    );
+    return buildDevelopmentEmailResult({
+      fallbackUrl,
+      fallbackUrlKey,
+      expiresAt,
+      message: noProviderMessage,
     });
   } catch (error) {
     if (!shouldUseDevelopmentFallback()) {
@@ -111,22 +139,56 @@ async function sendPasswordResetEmail({ to, name, resetUrl, expiresAt }) {
     }
 
     console.warn(
-      `SMTP delivery failed. Development password reset link for ${to}: ${resetUrl}. Error: ${error.message}`,
+      `Email delivery failed. Development link for ${to}: ${fallbackUrl}. Error: ${error.message}`,
     );
-    return {
-      delivered: false,
-      devResetUrl: resetUrl,
+    return buildDevelopmentEmailResult({
+      fallbackUrl,
+      fallbackUrlKey,
       expiresAt,
-      message: "SMTP delivery failed. Use devResetUrl to reset locally.",
+      message: failureMessage,
       error: error.message,
-    };
+    });
+  }
+}
+
+async function sendWithResend({ to, subject, text, html }) {
+  const response = await fetch(readResendApiUrl(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${readResendApiKey()}`,
+      "Content-Type": "application/json",
+      "User-Agent": "smart-travel-planner-backend/1.0",
+    },
+    body: JSON.stringify({
+      from: readMailFrom(),
+      to: [to],
+      subject,
+      text,
+      html,
+    }),
+    signal: AbortSignal.timeout(readEmailRequestTimeoutMs()),
+  });
+
+  const responseBody = await response.text();
+  const parsedBody = parseJson(responseBody);
+  if (!response.ok) {
+    const details =
+      parsedBody?.message || parsedBody?.error || responseBody || response.statusText;
+    throw new Error(`Resend email send failed (${response.status}): ${details}`);
   }
 
-  return {
-    delivered: true,
-    expiresAt,
-    message: "Password reset email sent.",
-  };
+  return parsedBody || {};
+}
+
+async function sendWithSmtp({ to, subject, text, html }) {
+  const transporter = await getTransporter();
+  await transporter.sendMail({
+    from: readMailFrom(),
+    to,
+    subject,
+    text,
+    html,
+  });
 }
 
 async function getTransporter() {
@@ -136,6 +198,9 @@ async function getTransporter() {
         host: process.env.SMTP_HOST,
         port: Number(process.env.SMTP_PORT || 587),
         secure: String(process.env.SMTP_SECURE ?? "").toLowerCase() === "true",
+        connectionTimeout: readEmailRequestTimeoutMs(),
+        greetingTimeout: readEmailRequestTimeoutMs(),
+        socketTimeout: readEmailRequestTimeoutMs(),
         tls: readTlsOptions(),
         auth: {
           user: process.env.SMTP_USER,
@@ -145,6 +210,32 @@ async function getTransporter() {
     );
   }
   return transporterPromise;
+}
+
+function readEmailProvider() {
+  const provider = String(process.env.EMAIL_PROVIDER ?? "auto")
+    .trim()
+    .toLowerCase();
+  if (["auto", "resend", "smtp"].includes(provider)) {
+    return provider;
+  }
+  return "auto";
+}
+
+function isResendConfigured() {
+  return Boolean(readResendApiKey());
+}
+
+function readResendApiKey() {
+  return readNonPlaceholderEnv(
+    "RESEND_API_KEY",
+    "replace_with_your_resend_api_key",
+    "your_resend_api_key_here",
+  );
+}
+
+function readResendApiUrl() {
+  return String(process.env.RESEND_API_URL || "https://api.resend.com/emails").trim();
 }
 
 function isSmtpConfigured() {
@@ -158,7 +249,8 @@ function isSmtpConfigured() {
 function readMailFrom() {
   return (
     String(process.env.MAIL_FROM ?? "").trim() ||
-    String(process.env.SMTP_USER ?? "").trim()
+    String(process.env.SMTP_USER ?? "").trim() ||
+    "Smart Trip Planner <onboarding@resend.dev>"
   );
 }
 
@@ -174,9 +266,57 @@ function readTlsOptions() {
 
 function shouldUseDevelopmentFallback() {
   const fallbackSetting = String(
-    process.env.SMTP_DEV_FALLBACK_ON_ERROR ?? "true",
+    process.env.EMAIL_DEV_FALLBACK_ON_ERROR ??
+      process.env.SMTP_DEV_FALLBACK_ON_ERROR ??
+      "true",
   ).toLowerCase();
   return process.env.NODE_ENV !== "production" && fallbackSetting !== "false";
+}
+
+function readEmailRequestTimeoutMs() {
+  const timeoutMs = Number(process.env.EMAIL_REQUEST_TIMEOUT_MS || 10000);
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return 10000;
+  }
+  return timeoutMs;
+}
+
+function readNonPlaceholderEnv(key, ...placeholders) {
+  const value = String(process.env[key] ?? "").trim();
+  if (!value) {
+    return "";
+  }
+
+  const lowerValue = value.toLowerCase();
+  if (placeholders.some((placeholder) => placeholder.toLowerCase() === lowerValue)) {
+    return "";
+  }
+
+  return value;
+}
+
+function buildDevelopmentEmailResult({
+  fallbackUrl,
+  fallbackUrlKey,
+  expiresAt,
+  message,
+  error,
+}) {
+  return {
+    delivered: false,
+    [fallbackUrlKey]: fallbackUrl,
+    expiresAt,
+    message,
+    ...(error ? { error } : {}),
+  };
+}
+
+function parseJson(value) {
+  try {
+    return JSON.parse(value);
+  } catch (_error) {
+    return null;
+  }
 }
 
 function formatExpiry(expiresAt) {

@@ -26,12 +26,9 @@ JWT_SECRET=replace_with_a_long_random_secret
 JWT_EXPIRES_IN=7d
 PUBLIC_API_BASE_URL=http://localhost:3000
 PUBLIC_APP_BASE_URL=http://localhost:5173
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_USER=your_email@example.com
-SMTP_PASS=your_email_app_password_here
-MAIL_FROM="Smart Travel Planner <your_email@example.com>"
+EMAIL_PROVIDER=firebase
+FIREBASE_AUTH_API_KEY=replace_with_your_firebase_web_api_key
+FIREBASE_AUTH_REQUEST_TIMEOUT_MS=10000
 EMAIL_VERIFICATION_EXPIRES_IN_MS=7200000
 PASSWORD_RESET_EXPIRES_IN_MS=7200000
 UNVERIFIED_ACCOUNT_CLEANUP_INTERVAL_MS=600000
@@ -42,6 +39,24 @@ UNVERIFIED_ACCOUNT_CLEANUP_INTERVAL_MS=600000
 `http://localhost:3000/api`
 
 This matches `lib/core/api/api_config.dart`.
+
+## Render Environment Variables
+
+In Render, open your backend web service, then go to **Environment** →
+**Environment Variables**. Set these deployment values:
+
+```env
+CORS_ORIGIN=https://smart-trip-planner.web.app
+PUBLIC_API_BASE_URL=https://six005cmd-api.onrender.com
+PUBLIC_APP_BASE_URL=https://smart-trip-planner.web.app
+EMAIL_PROVIDER=firebase
+FIREBASE_AUTH_API_KEY=<your_firebase_web_api_key>
+FIREBASE_AUTH_REQUEST_TIMEOUT_MS=10000
+```
+
+Do not set `PORT`, `NODE_ENV=development`, or SMTP variables on Render Free.
+Render provides `PORT`, and Render Free blocks outbound SMTP ports. The Firebase
+web API key is in Firebase Console → Project settings → General → Web API Key.
 
 ## Implemented Endpoints
 
@@ -87,7 +102,8 @@ This matches `lib/core/api/api_config.dart`.
 - Email verification links expire after 2 hours by default. Unverified accounts whose verification link has expired are automatically deleted by the backend cleanup job.
 - Forgot-password reset links expire after 2 hours by default. The reset link opens a simple backend-hosted form and clears the reset token after the password is changed.
 - The `users.firstLogin` flag is stored in the database. Login returns it to Flutter, and `POST /api/auth/complete-tour` flips it to `false` after the one-time app tour completes.
-- Email verification uses SMTP settings from `.env`. When SMTP is not configured, registration returns `emailVerification.devVerificationUrl` so local development can still verify the account manually. In non-production, SMTP delivery failures also return `devVerificationUrl` instead of blocking signup. If a private SMTP server intentionally uses a self-signed certificate, prefer installing its CA for Node; only use `SMTP_TLS_REJECT_UNAUTHORIZED=false` for local development.
+- Email verification and password reset emails use `EMAIL_PROVIDER=firebase` by default. Firebase Authentication sends the emails over HTTPS, so it works on Render Free and does not require owning a sender domain. Enable Email/Password in Firebase Authentication and set `FIREBASE_AUTH_API_KEY`.
+- Resend is still supported with `EMAIL_PROVIDER=resend` and `RESEND_API_KEY`, but it requires a verified sender domain before sending to arbitrary recipients. SMTP is also supported with `EMAIL_PROVIDER=smtp`, but do not use SMTP on Render Free. In non-production, non-Firebase delivery failures return `devVerificationUrl` or `devResetUrl` instead of blocking signup/reset.
 - `GET /api/external/weather`, `GET /api/external/weather/forecast`, `GET /api/trips/:id/weather`, and `GET /api/trips/:id/weather/forecast` use live Open-Meteo data and do not require an API key.
 - `GET /api/external/recommendations` and `GET /api/trips/:id/recommendations` use live Foursquare Places data when `FOURSQUARE_API_KEY` is configured in `backend/.env`.
 - `GET /api/trips/:id/agenda` builds a timed food/place tour-guide agenda from trip dates, Open-Meteo forecast, Foursquare recommendation groups, Foursquare `open_at` checks, and Google Routes walking paths. Use `availabilityDays=1..7` and `routeMapDays=1..7` to increase live open-at and route-map coverage for demos.

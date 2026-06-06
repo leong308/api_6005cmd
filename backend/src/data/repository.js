@@ -177,6 +177,8 @@ async function createUser(payload) {
     password: String(payload.password),
     emailVerified: Boolean(payload.emailVerified),
     emailVerifiedAt: payload.emailVerifiedAt ?? null,
+    emailVerificationProvider: payload.emailVerificationProvider ?? "email",
+    firebaseLocalId: payload.firebaseLocalId ?? null,
     emailVerificationTokenHash: payload.emailVerificationTokenHash ?? null,
     emailVerificationExpiresAt: payload.emailVerificationExpiresAt ?? null,
     passwordResetTokenHash: payload.passwordResetTokenHash ?? null,
@@ -466,6 +468,9 @@ function toUser(
   };
   if (includePassword) {
     publicUser.password = user.password;
+    publicUser.emailVerificationProvider =
+      user.emailVerificationProvider ?? "email";
+    publicUser.firebaseLocalId = user.firebaseLocalId ?? null;
   }
   if (includeVerification) {
     publicUser.emailVerificationTokenHash =

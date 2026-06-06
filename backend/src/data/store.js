@@ -379,6 +379,8 @@ function createUser(payload) {
     password: String(payload.password),
     emailVerified: Boolean(payload.emailVerified),
     emailVerifiedAt: payload.emailVerifiedAt ?? null,
+    emailVerificationProvider: payload.emailVerificationProvider ?? "email",
+    firebaseLocalId: payload.firebaseLocalId ?? null,
     emailVerificationTokenHash: payload.emailVerificationTokenHash ?? null,
     emailVerificationExpiresAt: payload.emailVerificationExpiresAt ?? null,
     passwordResetTokenHash: payload.passwordResetTokenHash ?? null,
