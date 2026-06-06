@@ -304,10 +304,12 @@ function markUserEmailVerified(userId) {
   if (!user) {
     return null;
   }
+  const now = new Date().toISOString();
   user.emailVerified = true;
-  user.emailVerifiedAt = new Date().toISOString();
+  user.emailVerifiedAt = now;
   user.emailVerificationTokenHash = null;
   user.emailVerificationExpiresAt = null;
+  user.updatedAt = now;
   return {
     id: user.id,
     name: user.name,
@@ -324,10 +326,12 @@ function setUserEmailVerification(userId, verification) {
   }
   user.emailVerificationTokenHash = verification.tokenHash;
   user.emailVerificationExpiresAt = verification.expiresAt;
+  user.updatedAt = new Date().toISOString();
   return user;
 }
 
 function createUser(payload) {
+  const now = new Date().toISOString();
   const created = {
     id: `user_${String(users.length + 1).padStart(3, "0")}`,
     name: String(payload.name).trim(),
@@ -337,6 +341,8 @@ function createUser(payload) {
     emailVerifiedAt: payload.emailVerifiedAt ?? null,
     emailVerificationTokenHash: payload.emailVerificationTokenHash ?? null,
     emailVerificationExpiresAt: payload.emailVerificationExpiresAt ?? null,
+    createdAt: now,
+    updatedAt: now,
   };
   users.push(created);
   return {
@@ -344,6 +350,34 @@ function createUser(payload) {
     name: created.name,
     email: created.email,
   };
+}
+
+function deleteExpiredUnverifiedUsers(referenceDate = new Date()) {
+  const referenceTime = referenceDate.getTime();
+  const expiredUserIds = users
+    .filter((user) => isExpiredUnverifiedUser(user, referenceTime))
+    .map((user) => user.id);
+
+  if (expiredUserIds.length === 0) {
+    return 0;
+  }
+
+  const expiredUserIdSet = new Set(expiredUserIds);
+  users = users.filter((user) => !expiredUserIdSet.has(user.id));
+  const tripsBefore = trips.length;
+  trips = trips.filter((trip) => !expiredUserIdSet.has(trip.ownerUserId));
+  if (trips.length !== tripsBefore) {
+    persistTrips();
+  }
+  return expiredUserIds.length;
+}
+
+function isExpiredUnverifiedUser(user, referenceTime) {
+  if (user.emailVerified) {
+    return false;
+  }
+  const expiresAt = Date.parse(user.emailVerificationExpiresAt ?? "");
+  return Number.isFinite(expiresAt) && expiresAt <= referenceTime;
 }
 
 module.exports = {
@@ -363,4 +397,5 @@ module.exports = {
   markUserEmailVerified,
   setUserEmailVerification,
   createUser,
+  deleteExpiredUnverifiedUsers,
 };

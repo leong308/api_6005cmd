@@ -10,9 +10,8 @@ const crypto = require("crypto");
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_super_secret_key_here";
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
-const EMAIL_VERIFICATION_EXPIRES_IN_MS = Number(
-  process.env.EMAIL_VERIFICATION_EXPIRES_IN_MS || 24 * 60 * 60 * 1000,
-);
+const DEFAULT_EMAIL_VERIFICATION_EXPIRES_IN_MS = 2 * 60 * 60 * 1000;
+const EMAIL_VERIFICATION_EXPIRES_IN_MS = readEmailVerificationExpiryMs();
 const SALT_ROUNDS = 10;
 
 /**
@@ -69,9 +68,17 @@ function hashToken(token) {
   return crypto.createHash("sha256").update(String(token)).digest("hex");
 }
 
+function readEmailVerificationExpiryMs() {
+  const configured = Number(process.env.EMAIL_VERIFICATION_EXPIRES_IN_MS);
+  return Number.isFinite(configured) && configured > 0
+    ? configured
+    : DEFAULT_EMAIL_VERIFICATION_EXPIRES_IN_MS;
+}
+
 module.exports = {
   comparePassword,
   createEmailVerificationToken,
+  EMAIL_VERIFICATION_EXPIRES_IN_MS,
   generateToken,
   hashPassword,
   hashToken,
