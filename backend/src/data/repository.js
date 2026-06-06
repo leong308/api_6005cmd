@@ -179,6 +179,10 @@ async function createUser(payload) {
     emailVerifiedAt: payload.emailVerifiedAt ?? null,
     emailVerificationTokenHash: payload.emailVerificationTokenHash ?? null,
     emailVerificationExpiresAt: payload.emailVerificationExpiresAt ?? null,
+    passwordResetTokenHash: payload.passwordResetTokenHash ?? null,
+    passwordResetExpiresAt: payload.passwordResetExpiresAt ?? null,
+    firstLogin:
+      payload.firstLogin !== undefined ? Boolean(payload.firstLogin) : true,
     createdAt: now,
     updatedAt: now,
   };
@@ -197,6 +201,18 @@ async function getUserByVerificationTokenHash(tokenHash) {
     emailVerificationTokenHash: String(tokenHash),
   });
   return user ? toUser(user, { includePassword: true, includeVerification: true }) : null;
+}
+
+async function getUserByPasswordResetTokenHash(tokenHash) {
+  if (!isMongoConfigured()) {
+    const user = localStore.getUserByPasswordResetTokenHash(tokenHash);
+    return user ? toUser(user, { includePassword: true, includeReset: true }) : null;
+  }
+
+  const user = await (await usersCollection()).findOne({
+    passwordResetTokenHash: String(tokenHash),
+  });
+  return user ? toUser(user, { includePassword: true, includeReset: true }) : null;
 }
 
 async function markUserEmailVerified(userId) {
@@ -248,6 +264,71 @@ async function setUserEmailVerification(userId, verification) {
   return user
     ? toUser(user, { includePassword: true, includeVerification: true })
     : null;
+}
+
+async function setUserPasswordReset(userId, reset) {
+  if (!isMongoConfigured()) {
+    const user = localStore.setUserPasswordReset(userId, reset);
+    return user ? toUser(user, { includePassword: true, includeReset: true }) : null;
+  }
+
+  const result = await (await usersCollection()).findOneAndUpdate(
+    { id: String(userId) },
+    {
+      $set: {
+        passwordResetTokenHash: reset.tokenHash,
+        passwordResetExpiresAt: reset.expiresAt,
+        updatedAt: new Date().toISOString(),
+      },
+    },
+    { returnDocument: "after" },
+  );
+  const user = result?.value ?? result;
+  return user ? toUser(user, { includePassword: true, includeReset: true }) : null;
+}
+
+async function updateUserPassword(userId, hashedPassword) {
+  if (!isMongoConfigured()) {
+    const user = localStore.updateUserPassword(userId, hashedPassword);
+    return user ? toUser(user) : null;
+  }
+
+  const result = await (await usersCollection()).findOneAndUpdate(
+    { id: String(userId) },
+    {
+      $set: {
+        password: String(hashedPassword),
+        updatedAt: new Date().toISOString(),
+      },
+      $unset: {
+        passwordResetTokenHash: "",
+        passwordResetExpiresAt: "",
+      },
+    },
+    { returnDocument: "after" },
+  );
+  const user = result?.value ?? result;
+  return user ? toUser(user) : null;
+}
+
+async function markUserAppTourCompleted(userId) {
+  if (!isMongoConfigured()) {
+    const user = localStore.markUserAppTourCompleted(userId);
+    return user ? toUser(user) : null;
+  }
+
+  const result = await (await usersCollection()).findOneAndUpdate(
+    { id: String(userId) },
+    {
+      $set: {
+        firstLogin: false,
+        updatedAt: new Date().toISOString(),
+      },
+    },
+    { returnDocument: "after" },
+  );
+  const user = result?.value ?? result;
+  return user ? toUser(user) : null;
 }
 
 async function deleteExpiredUnverifiedUsers(referenceDate = new Date()) {
@@ -369,7 +450,11 @@ function toPublicTrip(trip) {
 
 function toUser(
   user,
-  { includePassword = false, includeVerification = false } = {},
+  {
+    includePassword = false,
+    includeVerification = false,
+    includeReset = false,
+  } = {},
 ) {
   const publicUser = {
     id: user.id,
@@ -377,6 +462,7 @@ function toUser(
     email: user.email,
     emailVerified: Boolean(user.emailVerified),
     emailVerifiedAt: user.emailVerifiedAt ?? null,
+    firstLogin: user.firstLogin !== false,
   };
   if (includePassword) {
     publicUser.password = user.password;
@@ -386,6 +472,10 @@ function toUser(
       user.emailVerificationTokenHash ?? null;
     publicUser.emailVerificationExpiresAt =
       user.emailVerificationExpiresAt ?? null;
+  }
+  if (includeReset) {
+    publicUser.passwordResetTokenHash = user.passwordResetTokenHash ?? null;
+    publicUser.passwordResetExpiresAt = user.passwordResetExpiresAt ?? null;
   }
   return publicUser;
 }
@@ -430,9 +520,13 @@ module.exports = {
   getTripWeather,
   getUserByEmail,
   getUserById,
+  getUserByPasswordResetTokenHash,
   getUserByVerificationTokenHash,
   listTrips,
+  markUserAppTourCompleted,
   markUserEmailVerified,
+  setUserPasswordReset,
   setUserEmailVerification,
+  updateUserPassword,
   updateTrip,
 };

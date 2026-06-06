@@ -69,6 +69,66 @@ async function sendVerificationEmail({ to, name, verificationUrl, expiresAt }) {
   };
 }
 
+async function sendPasswordResetEmail({ to, name, resetUrl, expiresAt }) {
+  if (!isSmtpConfigured()) {
+    console.warn(
+      `SMTP is not configured. Development password reset link for ${to}: ${resetUrl}`,
+    );
+    return {
+      delivered: false,
+      devResetUrl: resetUrl,
+      expiresAt,
+      message: "SMTP is not configured. Use devResetUrl to reset locally.",
+    };
+  }
+
+  const transporter = await getTransporter();
+  try {
+    await transporter.sendMail({
+      from: readMailFrom(),
+      to,
+      subject: "Reset your Smart Travel Planner password",
+      text: [
+        `Hi ${name || "there"},`,
+        "",
+        "Open this link to reset your Smart Travel Planner password:",
+        resetUrl,
+        "",
+        `This link expires ${formatExpiry(expiresAt)}.`,
+        "If you did not request this, ignore this email.",
+      ].join("\n"),
+      html: [
+        `<p>Hi ${escapeHtml(name || "there")},</p>`,
+        "<p>Open this link to reset your Smart Travel Planner password:</p>",
+        `<p><a href="${resetUrl}">Reset password</a></p>`,
+        `<p>This link expires ${escapeHtml(formatExpiry(expiresAt))}.</p>`,
+        "<p>If you did not request this, ignore this email.</p>",
+      ].join(""),
+    });
+  } catch (error) {
+    if (!shouldUseDevelopmentFallback()) {
+      throw error;
+    }
+
+    console.warn(
+      `SMTP delivery failed. Development password reset link for ${to}: ${resetUrl}. Error: ${error.message}`,
+    );
+    return {
+      delivered: false,
+      devResetUrl: resetUrl,
+      expiresAt,
+      message: "SMTP delivery failed. Use devResetUrl to reset locally.",
+      error: error.message,
+    };
+  }
+
+  return {
+    delivered: true,
+    expiresAt,
+    message: "Password reset email sent.",
+  };
+}
+
 async function getTransporter() {
   if (!transporterPromise) {
     transporterPromise = Promise.resolve(
@@ -145,5 +205,6 @@ function escapeHtml(value) {
 }
 
 module.exports = {
+  sendPasswordResetEmail,
   sendVerificationEmail,
 };

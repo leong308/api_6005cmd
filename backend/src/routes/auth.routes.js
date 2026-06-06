@@ -10,18 +10,26 @@ const {
   createUser,
   getUserByEmail,
   getUserById,
+  getUserByPasswordResetTokenHash,
   getUserByVerificationTokenHash,
+  markUserAppTourCompleted,
   markUserEmailVerified,
+  setUserPasswordReset,
   setUserEmailVerification,
+  updateUserPassword,
 } = require("../data/repository");
 const {
   comparePassword,
   createEmailVerificationToken,
+  createPasswordResetToken,
   generateToken,
   hashPassword,
   hashToken,
 } = require("../services/authService");
-const { sendVerificationEmail } = require("../services/emailService");
+const {
+  sendPasswordResetEmail,
+  sendVerificationEmail,
+} = require("../services/emailService");
 const {
   cleanupExpiredUnverifiedUsers,
 } = require("../services/unverifiedUserCleanupService");
@@ -54,6 +62,7 @@ authRouter.post("/register", async (req, res, next) => {
       emailVerified: false,
       emailVerificationTokenHash: verification.tokenHash,
       emailVerificationExpiresAt: verification.expiresAt,
+      firstLogin: true,
     });
 
     const verificationUrl = buildVerificationUrl(req, verification.token);
@@ -157,6 +166,107 @@ authRouter.post("/resend-verification", async (req, res, next) => {
   }
 });
 
+authRouter.post("/forgot-password", async (req, res, next) => {
+  try {
+    assertRequiredFields(req.body, ["email"]);
+    const message =
+      "If an account exists for that email, a password reset link has been sent.";
+    const user = await getUserByEmail(String(req.body.email));
+    if (!user || !user.emailVerified) {
+      return res.json({ success: true, message });
+    }
+
+    const reset = createPasswordResetToken();
+    const updated = await setUserPasswordReset(user.id, reset);
+    const resetUrl = buildPasswordResetUrl(req, reset.token);
+    const emailResult = await sendPasswordResetEmail({
+      to: updated.email,
+      name: updated.name,
+      resetUrl,
+      expiresAt: reset.expiresAt,
+    });
+
+    return res.json({
+      success: true,
+      message,
+      passwordReset: emailResult,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+authRouter.get("/reset-password", async (req, res, next) => {
+  try {
+    const token = String(req.query.token ?? "").trim();
+    if (!token) {
+      return sendPasswordResetResponse(req, res, {
+        statusCode: 400,
+        success: false,
+        title: "Reset Link Missing",
+        message:
+          "The password reset link is missing its token. Please request a new password reset email.",
+      });
+    }
+
+    const user = await getUserByPasswordResetTokenHash(hashToken(token));
+    const validation = validatePasswordResetUser(user);
+    if (!validation.valid) {
+      return sendPasswordResetResponse(req, res, {
+        statusCode: 400,
+        success: false,
+        title: validation.title,
+        message: validation.message,
+      });
+    }
+
+    return res
+      .status(200)
+      .type("html")
+      .send(renderPasswordResetFormPage({ token }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+authRouter.post("/reset-password", async (req, res, next) => {
+  try {
+    assertRequiredFields(req.body, ["token", "password"]);
+    const token = String(req.body.token ?? "").trim();
+    const password = String(req.body.password ?? "");
+    if (password.length < 8) {
+      return sendPasswordResetResponse(req, res, {
+        statusCode: 400,
+        success: false,
+        title: "Password Too Short",
+        message: "Use a password with at least 8 characters.",
+      });
+    }
+
+    const user = await getUserByPasswordResetTokenHash(hashToken(token));
+    const validation = validatePasswordResetUser(user);
+    if (!validation.valid) {
+      return sendPasswordResetResponse(req, res, {
+        statusCode: 400,
+        success: false,
+        title: validation.title,
+        message: validation.message,
+      });
+    }
+
+    const hashedPassword = await hashPassword(password);
+    await updateUserPassword(user.id, hashedPassword);
+    return sendPasswordResetResponse(req, res, {
+      statusCode: 200,
+      success: true,
+      title: "Password Reset Complete",
+      message: "Your password has been updated. You can now log in.",
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 /**
  * POST /api/auth/login
  * Validates credentials using bcrypt and returns a JWT token.
@@ -191,6 +301,7 @@ authRouter.post("/login", async (req, res, next) => {
         name: user.name,
         email: user.email,
         emailVerified: user.emailVerified,
+        firstLogin: user.firstLogin !== false,
       },
     });
   } catch (error) {
@@ -217,6 +328,28 @@ authRouter.get("/profile", authMiddleware, async (req, res, next) => {
         name: user.name,
         email: user.email,
         emailVerified: user.emailVerified,
+        firstLogin: user.firstLogin !== false,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+authRouter.post("/complete-tour", authMiddleware, async (req, res, next) => {
+  try {
+    const user = await markUserAppTourCompleted(req.user.id);
+    if (!user) {
+      throw new HttpError(404, "User not found.");
+    }
+
+    return res.json({
+      success: true,
+      message: "App tour marked complete.",
+      data: {
+        id: user.id,
+        email: user.email,
+        firstLogin: user.firstLogin !== false,
       },
     });
   } catch (error) {
@@ -232,6 +365,34 @@ function buildVerificationUrl(req, token) {
     configuredBase ||
     `${req.protocol}://${req.get("host")}`;
   return `${baseUrl.replace(/\/$/, "")}/api/auth/verify-email?token=${encodeURIComponent(token)}`;
+}
+
+function buildPasswordResetUrl(req, token) {
+  const configuredBase = String(process.env.PUBLIC_API_BASE_URL ?? "").trim();
+  const baseUrl = configuredBase || `${req.protocol}://${req.get("host")}`;
+  return `${baseUrl.replace(/\/$/, "")}/api/auth/reset-password?token=${encodeURIComponent(token)}`;
+}
+
+function validatePasswordResetUser(user) {
+  if (!user) {
+    return {
+      valid: false,
+      title: "Reset Link Invalid",
+      message:
+        "This password reset link is invalid or has already been used.",
+    };
+  }
+
+  const expiresAt = new Date(user.passwordResetExpiresAt ?? 0);
+  if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() < Date.now()) {
+    return {
+      valid: false,
+      title: "Reset Link Expired",
+      message: "This password reset link has expired. Please request a new one.",
+    };
+  }
+
+  return { valid: true };
 }
 
 function sendVerificationResponse(
@@ -253,7 +414,30 @@ function sendVerificationResponse(
     .send(renderVerificationPage({ success, title, message }));
 }
 
+function sendPasswordResetResponse(
+  req,
+  res,
+  { statusCode, success, title, message, data = null },
+) {
+  if (!prefersHtml(req)) {
+    return res.status(statusCode).json({
+      success,
+      message,
+      data,
+    });
+  }
+
+  return res
+    .status(statusCode)
+    .type("html")
+    .send(renderVerificationPage({ success, title, message }));
+}
+
 function prefersHtml(req) {
+  const acceptHeader = String(req.get("accept") ?? "").toLowerCase();
+  if (!acceptHeader || acceptHeader.trim() === "*/*") {
+    return false;
+  }
   const preferred = req.accepts(["html", "json"]);
   return preferred === "html";
 }
@@ -353,6 +537,96 @@ function renderVerificationPage({ success, title, message }) {
     <h1>${escapedTitle}</h1>
     <p>${escapedMessage}</p>
     ${action}
+  </main>
+</body>
+</html>`;
+}
+
+function renderPasswordResetFormPage({ token }) {
+  const escapedToken = escapeAttribute(token);
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reset Password · Smart Travel Planner</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: linear-gradient(135deg, #eaf4ff, #eefbf6);
+      color: #1f2937;
+    }
+    * { box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    main {
+      width: min(460px, 100%);
+      padding: 30px;
+      border: 1px solid rgba(37, 99, 235, 0.18);
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: 0 22px 70px rgba(15, 23, 42, 0.12);
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 5vw, 36px);
+      line-height: 1.1;
+    }
+    p {
+      margin: 12px 0 22px;
+      color: #64748b;
+      line-height: 1.5;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #334155;
+      font-weight: 700;
+    }
+    input {
+      width: 100%;
+      min-height: 48px;
+      padding: 12px 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 14px;
+      font: inherit;
+      outline: none;
+    }
+    input:focus {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.14);
+    }
+    button {
+      width: 100%;
+      min-height: 48px;
+      margin-top: 18px;
+      border: 0;
+      border-radius: 999px;
+      background: #3b82f6;
+      color: white;
+      font: inherit;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 10px 28px rgba(59, 130, 246, 0.26);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Reset Password</h1>
+    <p>Enter a new password for your Smart Travel Planner account.</p>
+    <form method="post" action="/api/auth/reset-password">
+      <input type="hidden" name="token" value="${escapedToken}">
+      <label for="password">New password</label>
+      <input id="password" name="password" type="password" autocomplete="new-password" minlength="8" required autofocus>
+      <button type="submit">Update Password</button>
+    </form>
   </main>
 </body>
 </html>`;

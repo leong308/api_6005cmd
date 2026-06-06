@@ -1,0 +1,11 @@
+{
+  "hosting": {
+    "site": "smart-trip-planner",
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  }
+}

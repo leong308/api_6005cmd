@@ -299,6 +299,13 @@ function getUserByVerificationTokenHash(tokenHash) {
   );
 }
 
+function getUserByPasswordResetTokenHash(tokenHash) {
+  return (
+    users.find((user) => user.passwordResetTokenHash === String(tokenHash)) ??
+    null
+  );
+}
+
 function markUserEmailVerified(userId) {
   const user = users.find((item) => item.id === userId);
   if (!user) {
@@ -330,6 +337,39 @@ function setUserEmailVerification(userId, verification) {
   return user;
 }
 
+function setUserPasswordReset(userId, reset) {
+  const user = users.find((item) => item.id === userId);
+  if (!user) {
+    return null;
+  }
+  user.passwordResetTokenHash = reset.tokenHash;
+  user.passwordResetExpiresAt = reset.expiresAt;
+  user.updatedAt = new Date().toISOString();
+  return user;
+}
+
+function updateUserPassword(userId, hashedPassword) {
+  const user = users.find((item) => item.id === userId);
+  if (!user) {
+    return null;
+  }
+  user.password = String(hashedPassword);
+  user.passwordResetTokenHash = null;
+  user.passwordResetExpiresAt = null;
+  user.updatedAt = new Date().toISOString();
+  return user;
+}
+
+function markUserAppTourCompleted(userId) {
+  const user = users.find((item) => item.id === userId);
+  if (!user) {
+    return null;
+  }
+  user.firstLogin = false;
+  user.updatedAt = new Date().toISOString();
+  return user;
+}
+
 function createUser(payload) {
   const now = new Date().toISOString();
   const created = {
@@ -341,6 +381,10 @@ function createUser(payload) {
     emailVerifiedAt: payload.emailVerifiedAt ?? null,
     emailVerificationTokenHash: payload.emailVerificationTokenHash ?? null,
     emailVerificationExpiresAt: payload.emailVerificationExpiresAt ?? null,
+    passwordResetTokenHash: payload.passwordResetTokenHash ?? null,
+    passwordResetExpiresAt: payload.passwordResetExpiresAt ?? null,
+    firstLogin:
+      payload.firstLogin !== undefined ? Boolean(payload.firstLogin) : true,
     createdAt: now,
     updatedAt: now,
   };
@@ -394,8 +438,12 @@ module.exports = {
   getUserByEmail,
   getUserById,
   getUserByVerificationTokenHash,
+  getUserByPasswordResetTokenHash,
   markUserEmailVerified,
   setUserEmailVerification,
+  setUserPasswordReset,
+  updateUserPassword,
+  markUserAppTourCompleted,
   createUser,
   deleteExpiredUnverifiedUsers,
 };

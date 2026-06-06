@@ -56,6 +56,7 @@ async function ensureIndexes(db) {
       db.collection("users").createIndex({ id: 1 }, { unique: true }),
       db.collection("users").createIndex({ email: 1 }, { unique: true }),
       db.collection("users").createIndex({ emailVerificationTokenHash: 1 }),
+      db.collection("users").createIndex({ passwordResetTokenHash: 1 }),
       db
         .collection("api_cache")
         .createIndex({ namespace: 1, key: 1 }, { unique: true }),

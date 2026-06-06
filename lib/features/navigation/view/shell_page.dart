@@ -14,7 +14,6 @@ import 'package:api_6005cmd/features/trip_list/view/trip_list_page.dart';
 import 'package:api_6005cmd/features/trip_summary/data/trip_summary_data_source.dart';
 import 'package:api_6005cmd/features/trip_summary/view/trip_summary_page.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class ShellPage extends StatefulWidget {
   const ShellPage({super.key});
@@ -50,7 +49,6 @@ class _ShellPageState extends State<ShellPage> {
   AppSection _section = AppSection.tripList;
   String _selectedTripId = '';
   _AuthenticatedUser? _user;
-  String? _activeTourPreferenceKey;
 
   @override
   void dispose() {
@@ -227,12 +225,11 @@ class _ShellPageState extends State<ShellPage> {
       _selectedTripId = '';
       _section = AppSection.tripList;
     });
-    unawaited(_maybeStartFirstLoginTour(user));
+    _maybeStartFirstLoginTour(user);
   }
 
   void _logout() {
     _tourController.cancel();
-    _activeTourPreferenceKey = null;
     _apiClient.setAuthToken(null);
     _tripListDataSource.clearKnownTrips();
     setState(() {
@@ -242,13 +239,8 @@ class _ShellPageState extends State<ShellPage> {
     });
   }
 
-  Future<void> _maybeStartFirstLoginTour(_AuthenticatedUser user) async {
-    final preferenceKey = _tourPreferenceKey(user);
-    final preferences = await SharedPreferences.getInstance();
-    if (!mounted ||
-        _user?.id != user.id ||
-        _user?.email != user.email ||
-        (preferences.getBool(preferenceKey) ?? false)) {
+  void _maybeStartFirstLoginTour(_AuthenticatedUser user) {
+    if (!user.firstLogin) {
       return;
     }
 
@@ -256,7 +248,6 @@ class _ShellPageState extends State<ShellPage> {
       if (!mounted || _user?.id != user.id || _user?.email != user.email) {
         return;
       }
-      _activeTourPreferenceKey = preferenceKey;
       unawaited(
         _tourController.start(
           context: context,
@@ -266,11 +257,6 @@ class _ShellPageState extends State<ShellPage> {
         ),
       );
     });
-  }
-
-  String _tourPreferenceKey(_AuthenticatedUser user) {
-    final userKey = user.id.isNotEmpty ? user.id : user.email.toLowerCase();
-    return 'smart_travel.first_login_tour.completed.${Uri.encodeComponent(userKey)}';
   }
 
   List<AppTourStep> _buildFirstLoginTourSteps() {
@@ -372,8 +358,6 @@ class _ShellPageState extends State<ShellPage> {
   }
 
   void _finishFirstLoginTour({required bool restoreHome}) {
-    final preferenceKey = _activeTourPreferenceKey;
-    _activeTourPreferenceKey = null;
     if (restoreHome &&
         mounted &&
         _user != null &&
@@ -382,11 +366,11 @@ class _ShellPageState extends State<ShellPage> {
         _section = AppSection.tripList;
       });
     }
-    if (preferenceKey != null) {
+    if (_user != null) {
       unawaited(
-        SharedPreferences.getInstance().then(
-          (preferences) => preferences.setBool(preferenceKey, true),
-        ),
+        _apiClient
+            .postJson('/auth/complete-tour', {})
+            .catchError((_) => <String, dynamic>{}),
       );
     }
   }
@@ -398,12 +382,14 @@ class _AuthenticatedUser {
     required this.name,
     required this.email,
     required this.emailVerified,
+    required this.firstLogin,
   });
 
   final String id;
   final String name;
   final String email;
   final bool emailVerified;
+  final bool firstLogin;
 
   factory _AuthenticatedUser.fromJson(Map<String, dynamic> json) {
     return _AuthenticatedUser(
@@ -411,6 +397,7 @@ class _AuthenticatedUser {
       name: json['name']?.toString() ?? '',
       email: json['email']?.toString() ?? '',
       emailVerified: json['emailVerified'] == true,
+      firstLogin: json['firstLogin'] != false,
     );
   }
 }
@@ -430,9 +417,10 @@ class _AuthGateState extends State<_AuthGate> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _registerMode = false;
+  bool _forgotPasswordMode = false;
   bool _busy = false;
   String _message = '';
-  String _devVerificationUrl = '';
+  String _devActionUrl = '';
 
   @override
   void dispose() {
@@ -459,14 +447,20 @@ class _AuthGateState extends State<_AuthGate> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                _registerMode ? 'Create Account' : 'Login',
+                _forgotPasswordMode
+                    ? 'Reset Password'
+                    : _registerMode
+                    ? 'Create Account'
+                    : 'Login',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(height: 6),
               Text(
-                _registerMode
+                _forgotPasswordMode
+                    ? 'Enter your email and we will send a reset link.'
+                    : _registerMode
                     ? 'Verify your email before logging in.'
                     : 'Use your verified email account to continue.',
                 style: Theme.of(
@@ -474,7 +468,7 @@ class _AuthGateState extends State<_AuthGate> {
                 ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.62)),
               ),
               const SizedBox(height: 16),
-              if (_registerMode) ...[
+              if (_registerMode && !_forgotPasswordMode) ...[
                 TextField(
                   controller: _nameController,
                   textInputAction: TextInputAction.next,
@@ -485,34 +479,41 @@ class _AuthGateState extends State<_AuthGate> {
               TextField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
-                textInputAction: TextInputAction.next,
+                textInputAction: _forgotPasswordMode
+                    ? TextInputAction.done
+                    : TextInputAction.next,
+                onSubmitted: (_) {
+                  if (_forgotPasswordMode) {
+                    _requestPasswordReset();
+                  }
+                },
                 decoration: const InputDecoration(labelText: 'Email'),
               ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                onSubmitted: (_) => _registerMode ? _register() : _login(),
-                decoration: const InputDecoration(labelText: 'Password'),
-              ),
+              if (!_forgotPasswordMode) ...[
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _passwordController,
+                  obscureText: true,
+                  onSubmitted: (_) => _registerMode ? _register() : _login(),
+                  decoration: const InputDecoration(labelText: 'Password'),
+                ),
+              ],
               if (_message.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Text(
                   _message,
                   style: TextStyle(
-                    color:
-                        _message.toLowerCase().contains('success') ||
-                            _message.toLowerCase().contains('verify')
+                    color: _isPositiveMessage(_message)
                         ? AppPalette.mint
                         : AppPalette.coral,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
-              if (_devVerificationUrl.isNotEmpty) ...[
+              if (_devActionUrl.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 SelectableText(
-                  _devVerificationUrl,
+                  _devActionUrl,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppPalette.blue,
                     fontWeight: FontWeight.w700,
@@ -523,32 +524,62 @@ class _AuthGateState extends State<_AuthGate> {
               FilledButton.icon(
                 onPressed: _busy
                     ? null
+                    : _forgotPasswordMode
+                    ? _requestPasswordReset
                     : _registerMode
                     ? _register
                     : _login,
                 icon: Icon(
-                  _registerMode
+                  _forgotPasswordMode
+                      ? Icons.lock_reset_rounded
+                      : _registerMode
                       ? Icons.mark_email_read_rounded
                       : Icons.login_rounded,
                 ),
-                label: Text(_registerMode ? 'Sign Up' : 'Login'),
+                label: Text(
+                  _forgotPasswordMode
+                      ? 'Send Reset Link'
+                      : _registerMode
+                      ? 'Sign Up'
+                      : 'Login',
+                ),
               ),
               TextButton(
                 onPressed: _busy
                     ? null
                     : () {
                         setState(() {
-                          _registerMode = !_registerMode;
+                          if (_forgotPasswordMode) {
+                            _forgotPasswordMode = false;
+                            _registerMode = false;
+                          } else {
+                            _registerMode = !_registerMode;
+                          }
                           _message = '';
-                          _devVerificationUrl = '';
+                          _devActionUrl = '';
                         });
                       },
                 child: Text(
-                  _registerMode
+                  _forgotPasswordMode
+                      ? 'Back to Login'
+                      : _registerMode
                       ? 'Already verified? Login'
                       : 'Need an account? Sign up',
                 ),
               ),
+              if (!_registerMode && !_forgotPasswordMode)
+                TextButton(
+                  onPressed: _busy
+                      ? null
+                      : () {
+                          setState(() {
+                            _forgotPasswordMode = true;
+                            _message = '';
+                            _devActionUrl = '';
+                          });
+                        },
+                  child: const Text('Forgot password?'),
+                ),
             ],
           ),
         ),
@@ -583,9 +614,25 @@ class _AuthGateState extends State<_AuthGate> {
         _message =
             response['message']?.toString() ??
             'Registration success. Verify your email before logging in.';
-        _devVerificationUrl =
+        _devActionUrl =
             emailVerification['devVerificationUrl']?.toString() ?? '';
         _registerMode = false;
+      });
+    });
+  }
+
+  Future<void> _requestPasswordReset() async {
+    await _runAuthAction(() async {
+      final response = await widget.apiClient.postJson(
+        '/auth/forgot-password',
+        {'email': _emailController.text.trim()},
+      );
+      final passwordReset = _asMap(response['passwordReset']);
+      setState(() {
+        _message =
+            response['message']?.toString() ??
+            'If the email exists, a reset link has been sent.';
+        _devActionUrl = passwordReset['devResetUrl']?.toString() ?? '';
       });
     });
   }
@@ -594,7 +641,7 @@ class _AuthGateState extends State<_AuthGate> {
     setState(() {
       _busy = true;
       _message = '';
-      _devVerificationUrl = '';
+      _devActionUrl = '';
     });
     try {
       await action();
@@ -623,6 +670,14 @@ class _AuthGateState extends State<_AuthGate> {
       return value.map((key, item) => MapEntry(key.toString(), item));
     }
     return const {};
+  }
+
+  bool _isPositiveMessage(String value) {
+    final normalized = value.toLowerCase();
+    return normalized.contains('success') ||
+        normalized.contains('verify') ||
+        normalized.contains('sent') ||
+        normalized.contains('updated');
   }
 }
 
