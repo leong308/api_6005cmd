@@ -13,7 +13,9 @@ const {
   updateTrip,
   deleteTrip,
   getTripGooglePlaces,
-} = require("../data/store");
+} = require("../data/repository");
+const cacheRepository = require("../data/cacheRepository");
+const { authMiddleware } = require("../middleware/authMiddleware");
 const {
   HttpError,
   assertProvidedFieldsNotEmpty,
@@ -35,43 +37,68 @@ const REQUIRED_TRIP_FIELDS = [
   "endDate",
 ];
 
+tripRouter.use(authMiddleware);
 
-tripRouter.get("/", (req, res) => {
-  const trips = listTrips();
-  res.json({
-    success: true,
-    total: trips.length,
-    data: trips,
-  });
+tripRouter.get("/", async (req, res, next) => {
+  try {
+    const trips = await listTrips(req.user.id);
+    res.json({
+      success: true,
+      total: trips.length,
+      data: trips,
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
-tripRouter.post("/", (req, res) => {
-  assertRequiredFields(req.body, REQUIRED_TRIP_FIELDS);
+tripRouter.post("/", async (req, res, next) => {
+  try {
+    assertRequiredFields(req.body, REQUIRED_TRIP_FIELDS);
 
-  const created = createTrip(req.body);
-  res.status(201).json({
-    success: true,
-    message: "Trip created.",
-    data: created,
-  });
+    const created = await createTrip(req.body, req.user.id);
+    res.status(201).json({
+      success: true,
+      message: "Trip created.",
+      data: created,
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 tripRouter.get("/:id/weather", async (req, res, next) => {
   try {
-    const trip = getTripById(req.params.id);
+    const trip = await getTripById(req.params.id, req.user.id);
     if (!trip) {
       throw new HttpError(404, "Trip not found.");
+    }
+
+    const cacheKey = buildTripCacheKey(trip, "weather");
+    const cached = await cacheRepository.getCachedValue("trip_weather", cacheKey);
+    if (cached !== undefined) {
+      return res.json({
+        success: true,
+        provider: "open-meteo",
+        tripId: req.params.id,
+        cached: true,
+        data: cached,
+      });
     }
 
     const data = await weatherService.fetchCurrentWeather(
       trip.latitude,
       trip.longitude,
     );
+    await cacheRepository.setCachedValue("trip_weather", cacheKey, data, {
+      metadata: { tripId: trip.id, provider: "open-meteo" },
+    });
 
     return res.json({
       success: true,
       provider: "open-meteo",
       tripId: req.params.id,
+      cached: false,
       data,
     });
   } catch (error) {
@@ -81,9 +108,24 @@ tripRouter.get("/:id/weather", async (req, res, next) => {
 
 tripRouter.get("/:id/weather/forecast", async (req, res, next) => {
   try {
-    const trip = getTripById(req.params.id);
+    const trip = await getTripById(req.params.id, req.user.id);
     if (!trip) {
       throw new HttpError(404, "Trip not found.");
+    }
+
+    const cacheKey = buildTripCacheKey(trip, "forecast");
+    const cached = await cacheRepository.getCachedValue(
+      "trip_forecast",
+      cacheKey,
+    );
+    if (cached !== undefined) {
+      return res.json({
+        success: true,
+        provider: "open-meteo",
+        tripId: req.params.id,
+        cached: true,
+        data: cached,
+      });
     }
 
     const data = await weatherService.fetchDailyForecast(
@@ -92,11 +134,15 @@ tripRouter.get("/:id/weather/forecast", async (req, res, next) => {
       trip.startDate,
       trip.endDate,
     );
+    await cacheRepository.setCachedValue("trip_forecast", cacheKey, data, {
+      metadata: { tripId: trip.id, provider: "open-meteo" },
+    });
 
     return res.json({
       success: true,
       provider: "open-meteo",
       tripId: req.params.id,
+      cached: false,
       data,
     });
   } catch (error) {
@@ -104,22 +150,26 @@ tripRouter.get("/:id/weather/forecast", async (req, res, next) => {
   }
 });
 
-tripRouter.get("/:id/google-places", (req, res) => {
-  const trip = getTripById(req.params.id);
-  if (!trip) {
-    throw new HttpError(404, "Trip not found.");
-  }
+tripRouter.get("/:id/google-places", async (req, res, next) => {
+  try {
+    const trip = await getTripById(req.params.id, req.user.id);
+    if (!trip) {
+      throw new HttpError(404, "Trip not found.");
+    }
 
-  res.json({
-    success: true,
-    tripId: req.params.id,
-    data: getTripGooglePlaces(req.params.id),
-  });
+    res.json({
+      success: true,
+      tripId: req.params.id,
+      data: await getTripGooglePlaces(req.params.id),
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 tripRouter.get("/:id/recommendations", async (req, res, next) => {
   try {
-    const trip = getTripById(req.params.id);
+    const trip = await getTripById(req.params.id, req.user.id);
     if (!trip) {
       throw new HttpError(404, "Trip not found.");
     }
@@ -153,7 +203,7 @@ tripRouter.get("/:id/recommendations", async (req, res, next) => {
 
 tripRouter.get("/:id/agenda", async (req, res, next) => {
   try {
-    const trip = getTripById(req.params.id);
+    const trip = await getTripById(req.params.id, req.user.id);
     if (!trip) {
       throw new HttpError(404, "Trip not found.");
     }
@@ -167,6 +217,24 @@ tripRouter.get("/:id/agenda", async (req, res, next) => {
     const routeMapDayIndexes = parseRouteMapDayIndexes(
       req.query.routeMapDayIndexes,
     );
+    const cacheKey = buildTripCacheKey(trip, "agenda", {
+      availabilityDays,
+      limit,
+      limitsByPreference,
+      routeMapDayIndexes,
+      routeMapDays,
+    });
+    const cached = await cacheRepository.getCachedValue("trip_agenda", cacheKey);
+    if (cached !== undefined) {
+      return res.json({
+        success: true,
+        provider: "smart-travel-planner",
+        tripId: req.params.id,
+        cached: true,
+        data: cached,
+      });
+    }
+
     const [dailyWeatherForecast, recommendationGroups] = await Promise.all([
       weatherService
         .fetchDailyForecast(
@@ -195,11 +263,15 @@ tripRouter.get("/:id/agenda", async (req, res, next) => {
       routeMapDays,
       routeMapDayIndexes,
     });
+    await cacheRepository.setCachedValue("trip_agenda", cacheKey, data, {
+      metadata: { tripId: trip.id, provider: "smart-travel-planner" },
+    });
 
     return res.json({
       success: true,
       provider: "smart-travel-planner",
       tripId: req.params.id,
+      cached: false,
       data,
     });
   } catch (error) {
@@ -209,17 +281,32 @@ tripRouter.get("/:id/agenda", async (req, res, next) => {
 
 tripRouter.get("/:id/country-info", async (req, res, next) => {
   try {
-    const trip = getTripById(req.params.id);
+    const trip = await getTripById(req.params.id, req.user.id);
     if (!trip) {
       throw new HttpError(404, "Trip not found.");
     }
 
     const countryName = await resolveTripCountryName(trip);
+    const cacheKey = buildTripCacheKey(trip, "country", { countryName });
+    const cached = await cacheRepository.getCachedValue("trip_country", cacheKey);
+    if (cached !== undefined) {
+      return res.json({
+        success: true,
+        tripId: req.params.id,
+        cached: true,
+        data: cached,
+      });
+    }
+
     const countryData = await countryService.fetchCountryData(countryName);
+    await cacheRepository.setCachedValue("trip_country", cacheKey, countryData, {
+      metadata: { tripId: trip.id, provider: "rest-countries" },
+    });
 
     return res.json({
       success: true,
       tripId: req.params.id,
+      cached: false,
       data: countryData,
     });
   } catch (error) {
@@ -227,42 +314,54 @@ tripRouter.get("/:id/country-info", async (req, res, next) => {
   }
 });
 
-tripRouter.get("/:id", (req, res) => {
-  const trip = getTripById(req.params.id);
-  if (!trip) {
-    throw new HttpError(404, "Trip not found.");
-  }
+tripRouter.get("/:id", async (req, res, next) => {
+  try {
+    const trip = await getTripById(req.params.id, req.user.id);
+    if (!trip) {
+      throw new HttpError(404, "Trip not found.");
+    }
 
-  res.json({
-    success: true,
-    data: trip,
-  });
+    res.json({
+      success: true,
+      data: trip,
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
-tripRouter.put("/:id", (req, res) => {
-  assertProvidedFieldsNotEmpty(req.body, REQUIRED_TRIP_FIELDS);
-  const updated = updateTrip(req.params.id, req.body);
-  if (!updated) {
-    throw new HttpError(404, "Trip not found.");
-  }
+tripRouter.put("/:id", async (req, res, next) => {
+  try {
+    assertProvidedFieldsNotEmpty(req.body, REQUIRED_TRIP_FIELDS);
+    const updated = await updateTrip(req.params.id, req.body, req.user.id);
+    if (!updated) {
+      throw new HttpError(404, "Trip not found.");
+    }
 
-  res.json({
-    success: true,
-    message: "Trip updated.",
-    data: updated,
-  });
+    res.json({
+      success: true,
+      message: "Trip updated.",
+      data: updated,
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
-tripRouter.delete("/:id", (req, res) => {
-  const deleted = deleteTrip(req.params.id);
-  if (!deleted) {
-    throw new HttpError(404, "Trip not found.");
-  }
+tripRouter.delete("/:id", async (req, res, next) => {
+  try {
+    const deleted = await deleteTrip(req.params.id, req.user.id);
+    if (!deleted) {
+      throw new HttpError(404, "Trip not found.");
+    }
 
-  res.json({
-    success: true,
-    message: "Trip deleted.",
-  });
+    res.json({
+      success: true,
+      message: "Trip deleted.",
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 module.exports = { tripRouter };
@@ -340,4 +439,26 @@ function parseRecommendationLimits(value) {
         [preference]: parseRecommendationLimit(rawLimit),
       };
     }, {});
+}
+
+function buildTripCacheKey(trip, namespace, options = {}) {
+  return [
+    trip.id,
+    trip.updatedAt ?? "",
+    namespace,
+    stableStringify(options),
+  ].join(":");
+}
+
+function stableStringify(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
 }

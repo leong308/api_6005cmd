@@ -5,6 +5,7 @@
  * response into app-friendly route data, and decodes Google polylines into
  * latitude/longitude points for map rendering.
  */
+const cacheRepository = require("../data/cacheRepository");
 const { HttpError } = require("../lib/http");
 
 const GOOGLE_ROUTES_URL =
@@ -40,6 +41,17 @@ async function fetchRoute({
   validateCoordinates(fromLatitude, fromLongitude, "Origin");
   validateCoordinates(toLatitude, toLongitude, "Destination");
   const routeMode = routeModeConfig(mode);
+  const cacheKey = buildRouteCacheKey({
+    fromLatitude,
+    fromLongitude,
+    toLatitude,
+    toLongitude,
+    mode: routeMode.mode,
+  });
+  const cachedRoute = await cacheRepository.getCachedValue("routes", cacheKey);
+  if (cachedRoute !== undefined) {
+    return cachedRoute;
+  }
 
   const response = await fetch(GOOGLE_ROUTES_URL, {
     method: "POST",
@@ -82,7 +94,7 @@ async function fetchRoute({
     throw new HttpError(502, "Google Routes API returned an empty route path.");
   }
 
-  return {
+  const data = {
     provider: "google-routes",
     mode: routeMode.mode,
     modeLabel: routeMode.label,
@@ -102,6 +114,10 @@ async function fetchRoute({
     duration: route.duration ?? "",
     path,
   };
+  await cacheRepository.setCachedValue("routes", cacheKey, data, {
+    metadata: { provider: "google-routes", mode: routeMode.mode },
+  });
+  return data;
 }
 
 async function fetchWalkingRoute(coordinates) {
@@ -184,6 +200,22 @@ function validateCoordinates(latitude, longitude, label) {
       `${label} longitude must be a valid number between -180 and 180.`,
     );
   }
+}
+
+function buildRouteCacheKey({
+  fromLatitude,
+  fromLongitude,
+  toLatitude,
+  toLongitude,
+  mode,
+}) {
+  return [
+    mode,
+    Number(fromLatitude).toFixed(5),
+    Number(fromLongitude).toFixed(5),
+    Number(toLatitude).toFixed(5),
+    Number(toLongitude).toFixed(5),
+  ].join(",");
 }
 
 function extractRouteError(body, status) {

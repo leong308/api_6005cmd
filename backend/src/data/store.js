@@ -124,6 +124,7 @@ function getTripById(id) {
 function createTrip(payload) {
   const created = {
     id: generateTripId(),
+    ownerUserId: payload.ownerUserId ? String(payload.ownerUserId) : null,
     destinationName: String(payload.destinationName).trim(),
     destinationCountry: String(payload.destinationCountry).trim(),
     latitude: Number(payload.latitude),
@@ -151,6 +152,10 @@ function updateTrip(id, payload) {
   const current = trips[index];
   const updated = {
     ...current,
+    ownerUserId:
+      payload.ownerUserId !== undefined
+        ? String(payload.ownerUserId)
+        : current.ownerUserId ?? null,
     destinationName:
       payload.destinationName !== undefined
         ? String(payload.destinationName).trim()
@@ -286,12 +291,52 @@ function getUserById(userId) {
   return users.find((user) => user.id === userId) ?? null;
 }
 
+function getUserByVerificationTokenHash(tokenHash) {
+  return (
+    users.find(
+      (user) => user.emailVerificationTokenHash === String(tokenHash),
+    ) ?? null
+  );
+}
+
+function markUserEmailVerified(userId) {
+  const user = users.find((item) => item.id === userId);
+  if (!user) {
+    return null;
+  }
+  user.emailVerified = true;
+  user.emailVerifiedAt = new Date().toISOString();
+  user.emailVerificationTokenHash = null;
+  user.emailVerificationExpiresAt = null;
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    emailVerified: user.emailVerified,
+    emailVerifiedAt: user.emailVerifiedAt,
+  };
+}
+
+function setUserEmailVerification(userId, verification) {
+  const user = users.find((item) => item.id === userId);
+  if (!user) {
+    return null;
+  }
+  user.emailVerificationTokenHash = verification.tokenHash;
+  user.emailVerificationExpiresAt = verification.expiresAt;
+  return user;
+}
+
 function createUser(payload) {
   const created = {
     id: `user_${String(users.length + 1).padStart(3, "0")}`,
     name: String(payload.name).trim(),
     email: String(payload.email).trim().toLowerCase(),
     password: String(payload.password),
+    emailVerified: Boolean(payload.emailVerified),
+    emailVerifiedAt: payload.emailVerifiedAt ?? null,
+    emailVerificationTokenHash: payload.emailVerificationTokenHash ?? null,
+    emailVerificationExpiresAt: payload.emailVerificationExpiresAt ?? null,
   };
   users.push(created);
   return {
@@ -314,5 +359,8 @@ module.exports = {
   getTripSummary,
   getUserByEmail,
   getUserById,
+  getUserByVerificationTokenHash,
+  markUserEmailVerified,
+  setUserEmailVerification,
   createUser,
 };

@@ -6,9 +6,13 @@
  */
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_super_secret_key_here";
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
+const EMAIL_VERIFICATION_EXPIRES_IN_MS = Number(
+  process.env.EMAIL_VERIFICATION_EXPIRES_IN_MS || 24 * 60 * 60 * 1000,
+);
 const SALT_ROUNDS = 10;
 
 /**
@@ -51,9 +55,25 @@ function verifyToken(token) {
   return jwt.verify(token, JWT_SECRET);
 }
 
+function createEmailVerificationToken() {
+  const token = crypto.randomBytes(32).toString("hex");
+  return {
+    token,
+    tokenHash: hashToken(token),
+    expiresAt: new Date(Date.now() + EMAIL_VERIFICATION_EXPIRES_IN_MS)
+      .toISOString(),
+  };
+}
+
+function hashToken(token) {
+  return crypto.createHash("sha256").update(String(token)).digest("hex");
+}
+
 module.exports = {
-  hashPassword,
   comparePassword,
+  createEmailVerificationToken,
   generateToken,
+  hashPassword,
+  hashToken,
   verifyToken,
 };

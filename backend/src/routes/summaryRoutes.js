@@ -6,10 +6,11 @@
  */
 const express = require("express");
 const { getTripSummary } = require("../controllers/summaryController");
+const { authMiddleware } = require("../middleware/authMiddleware");
 
 const summaryRouter = express.Router();
 
-summaryRouter.get("/:id/summary", getTripSummary);
+summaryRouter.get("/:id/summary", authMiddleware, getTripSummary);
 
 module.exports = {
   summaryRouter,

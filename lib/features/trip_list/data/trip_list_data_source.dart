@@ -10,6 +10,10 @@ class TripListDataSource {
   final ApiClient apiClient;
   final Map<String, TripListItemModel> _knownTrips = {};
 
+  void clearKnownTrips() {
+    _knownTrips.clear();
+  }
+
   Future<List<TripListItemModel>> fetchTrips() async {
     final response = await apiClient.getJson('/trips');
     final data = response['data'];

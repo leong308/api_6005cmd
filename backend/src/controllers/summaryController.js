@@ -37,6 +37,7 @@ async function getTripSummary(req, res, next) {
         routeMapDays,
         routeMapDayIndexes,
         availabilityDays,
+        userId: req.user.id,
       },
     );
 

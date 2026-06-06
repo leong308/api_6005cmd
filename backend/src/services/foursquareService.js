@@ -7,6 +7,7 @@
  * Geoapify Places so the backend keeps returning usable data.
  */
 const geoapifyService = require("./geoapifyService");
+const cacheRepository = require("../data/cacheRepository");
 const { HttpError } = require("../lib/http");
 
 const FOURSQUARE_SEARCH_URL =
@@ -18,6 +19,9 @@ const CACHE_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_RADIUS_METERS = 8000;
 const DEFAULT_LIMIT = 5;
 const FOURSQUARE_TIMEOUT_MS = Number(process.env.FOURSQUARE_TIMEOUT_MS || 10000);
+const NEGATIVE_CACHE_TTL_MS = Number(
+  process.env.RECOMMENDATION_EMPTY_CACHE_TTL_MS || 15 * 60 * 1000,
+);
 
 const cache = new Map();
 
@@ -86,6 +90,18 @@ async function fetchRecommendations({
     normalizedLimit,
     normalizeOpenAt(openAt),
   );
+  const mongoCached = await cacheRepository.getCachedValue(
+    "recommendations",
+    key,
+  );
+  if (mongoCached !== undefined) {
+    cache.set(key, {
+      data: mongoCached,
+      expiresAt: Date.now() + CACHE_TTL_MS,
+    });
+    return mongoCached;
+  }
+
   const cached = cache.get(key);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.data;
@@ -129,11 +145,7 @@ async function fetchRecommendations({
     );
 
     if (data.length > 0) {
-      cache.set(key, {
-        data,
-        expiresAt: Date.now() + CACHE_TTL_MS,
-      });
-
+      await rememberRecommendations(key, data);
       return data;
     }
 
@@ -158,10 +170,7 @@ async function fetchRecommendations({
     );
     return [];
   });
-  cache.set(key, {
-    data,
-    expiresAt: Date.now() + CACHE_TTL_MS,
-  });
+  await rememberRecommendations(key, data);
 
   return data;
 }
@@ -407,6 +416,21 @@ function clampLimit(value) {
     return DEFAULT_LIMIT;
   }
   return Math.min(Math.max(parsed, 1), 10);
+}
+
+async function rememberRecommendations(key, data) {
+  cache.set(key, {
+    data,
+    expiresAt: Date.now() + CACHE_TTL_MS,
+  });
+
+  await cacheRepository.setCachedValue("recommendations", key, data, {
+    ttlMs: data.length > 0 ? undefined : NEGATIVE_CACHE_TTL_MS,
+    metadata: {
+      provider: data[0]?.source ?? "empty",
+      resultCount: data.length,
+    },
+  });
 }
 
 module.exports = {

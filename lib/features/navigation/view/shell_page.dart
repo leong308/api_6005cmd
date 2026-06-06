@@ -1,4 +1,5 @@
 import 'package:api_6005cmd/app/theme/app_palette.dart';
+import 'package:api_6005cmd/core/api/api_client.dart';
 import 'package:api_6005cmd/features/add_trip/view/add_trip_page.dart';
 import 'package:api_6005cmd/features/api_demo/data/api_demo_data_source.dart';
 import 'package:api_6005cmd/features/api_demo/view/api_demo_page.dart';
@@ -19,7 +20,10 @@ class ShellPage extends StatefulWidget {
 }
 
 class _ShellPageState extends State<ShellPage> {
-  final TripListDataSource _tripListDataSource = TripListDataSource();
+  final ApiClient _apiClient = ApiClient();
+  late final TripListDataSource _tripListDataSource = TripListDataSource(
+    apiClient: _apiClient,
+  );
   late final TripSummaryDataSource _tripSummaryDataSource =
       TripSummaryDataSource(_tripListDataSource);
   late final EditTripDataSource _editTripDataSource = EditTripDataSource(
@@ -29,12 +33,32 @@ class _ShellPageState extends State<ShellPage> {
 
   AppSection _section = AppSection.tripList;
   String _selectedTripId = '';
+  _AuthenticatedUser? _user;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 980;
+        if (_user == null) {
+          return Scaffold(
+            body: _ScaffoldBackdrop(
+              section: AppSection.tripList,
+              child: SafeArea(
+                child: Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(18),
+                    child: _AuthGate(
+                      apiClient: _apiClient,
+                      onAuthenticated: _handleAuthenticated,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
         if (isWide) {
           return Scaffold(
             body: _ScaffoldBackdrop(
@@ -44,6 +68,8 @@ class _ShellPageState extends State<ShellPage> {
                   children: [
                     _DesktopSidebar(
                       section: _section,
+                      user: _user!,
+                      onLogout: _logout,
                       onSectionChanged: _setSection,
                     ),
                     Expanded(
@@ -63,7 +89,16 @@ class _ShellPageState extends State<ShellPage> {
         }
 
         return Scaffold(
-          appBar: AppBar(title: const Text('Smart Travel Planner')),
+          appBar: AppBar(
+            title: const Text('Smart Travel Planner'),
+            actions: [
+              IconButton(
+                tooltip: 'Logout',
+                onPressed: _logout,
+                icon: const Icon(Icons.logout_rounded),
+              ),
+            ],
+          ),
           body: _ScaffoldBackdrop(
             section: _section,
             child: SafeArea(
@@ -149,15 +184,273 @@ class _ShellPageState extends State<ShellPage> {
       _section = section;
     });
   }
+
+  void _handleAuthenticated(_AuthenticatedUser user, String token) {
+    _apiClient.setAuthToken(token);
+    _tripListDataSource.clearKnownTrips();
+    setState(() {
+      _user = user;
+      _selectedTripId = '';
+      _section = AppSection.tripList;
+    });
+  }
+
+  void _logout() {
+    _apiClient.setAuthToken(null);
+    _tripListDataSource.clearKnownTrips();
+    setState(() {
+      _user = null;
+      _selectedTripId = '';
+      _section = AppSection.tripList;
+    });
+  }
+}
+
+class _AuthenticatedUser {
+  const _AuthenticatedUser({
+    required this.id,
+    required this.name,
+    required this.email,
+    required this.emailVerified,
+  });
+
+  final String id;
+  final String name;
+  final String email;
+  final bool emailVerified;
+
+  factory _AuthenticatedUser.fromJson(Map<String, dynamic> json) {
+    return _AuthenticatedUser(
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      email: json['email']?.toString() ?? '',
+      emailVerified: json['emailVerified'] == true,
+    );
+  }
+}
+
+class _AuthGate extends StatefulWidget {
+  const _AuthGate({required this.apiClient, required this.onAuthenticated});
+
+  final ApiClient apiClient;
+  final void Function(_AuthenticatedUser user, String token) onAuthenticated;
+
+  @override
+  State<_AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<_AuthGate> {
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _registerMode = false;
+  bool _busy = false;
+  String _message = '';
+  String _devVerificationUrl = '';
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 460),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: AppPalette.whiteA(0.82),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppPalette.blueA(0.22)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                _registerMode ? 'Create Account' : 'Login',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                _registerMode
+                    ? 'Verify your email before logging in.'
+                    : 'Use your verified email account to continue.',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.62)),
+              ),
+              const SizedBox(height: 16),
+              if (_registerMode) ...[
+                TextField(
+                  controller: _nameController,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(labelText: 'Name'),
+                ),
+                const SizedBox(height: 10),
+              ],
+              TextField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(labelText: 'Email'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _passwordController,
+                obscureText: true,
+                onSubmitted: (_) => _registerMode ? _register() : _login(),
+                decoration: const InputDecoration(labelText: 'Password'),
+              ),
+              if (_message.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _message,
+                  style: TextStyle(
+                    color:
+                        _message.toLowerCase().contains('success') ||
+                            _message.toLowerCase().contains('verify')
+                        ? AppPalette.mint
+                        : AppPalette.coral,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+              if (_devVerificationUrl.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                SelectableText(
+                  _devVerificationUrl,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppPalette.blue,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: _busy
+                    ? null
+                    : _registerMode
+                    ? _register
+                    : _login,
+                icon: Icon(
+                  _registerMode
+                      ? Icons.mark_email_read_rounded
+                      : Icons.login_rounded,
+                ),
+                label: Text(_registerMode ? 'Sign Up' : 'Login'),
+              ),
+              TextButton(
+                onPressed: _busy
+                    ? null
+                    : () {
+                        setState(() {
+                          _registerMode = !_registerMode;
+                          _message = '';
+                          _devVerificationUrl = '';
+                        });
+                      },
+                child: Text(
+                  _registerMode
+                      ? 'Already verified? Login'
+                      : 'Need an account? Sign up',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _login() async {
+    await _runAuthAction(() async {
+      final response = await widget.apiClient.postJson('/auth/login', {
+        'email': _emailController.text.trim(),
+        'password': _passwordController.text,
+      });
+      final token = response['token']?.toString() ?? '';
+      final data = _asMap(response['data']);
+      if (token.isEmpty) {
+        throw const ApiException(500, 'Login did not return a token.');
+      }
+      widget.onAuthenticated(_AuthenticatedUser.fromJson(data), token);
+    });
+  }
+
+  Future<void> _register() async {
+    await _runAuthAction(() async {
+      final response = await widget.apiClient.postJson('/auth/register', {
+        'name': _nameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'password': _passwordController.text,
+      });
+      final emailVerification = _asMap(response['emailVerification']);
+      setState(() {
+        _message =
+            response['message']?.toString() ??
+            'Registration success. Verify your email before logging in.';
+        _devVerificationUrl =
+            emailVerification['devVerificationUrl']?.toString() ?? '';
+        _registerMode = false;
+      });
+    });
+  }
+
+  Future<void> _runAuthAction(Future<void> Function() action) async {
+    setState(() {
+      _busy = true;
+      _message = '';
+      _devVerificationUrl = '';
+    });
+    try {
+      await action();
+    } on ApiException catch (error) {
+      setState(() {
+        _message = error.message;
+      });
+    } catch (error) {
+      setState(() {
+        _message = error.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+        });
+      }
+    }
+  }
+
+  Map<String, dynamic> _asMap(Object? value) {
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+    if (value is Map) {
+      return value.map((key, item) => MapEntry(key.toString(), item));
+    }
+    return const {};
+  }
 }
 
 class _DesktopSidebar extends StatelessWidget {
   const _DesktopSidebar({
     required this.section,
+    required this.user,
+    required this.onLogout,
     required this.onSectionChanged,
   });
 
   final AppSection section;
+  final _AuthenticatedUser user;
+  final VoidCallback onLogout;
   final ValueChanged<AppSection> onSectionChanged;
 
   @override
@@ -197,6 +490,17 @@ class _DesktopSidebar extends StatelessWidget {
                     color: AppPalette.ink,
                   ),
                 ),
+                const SizedBox(height: 8),
+                Text(
+                  user.email,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppPalette.inkA(0.64),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ],
             ),
           ),
@@ -214,6 +518,12 @@ class _DesktopSidebar extends StatelessWidget {
                 );
               }).toList(),
             ),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: onLogout,
+            icon: const Icon(Icons.logout_rounded, size: 18),
+            label: const Text('Logout'),
           ),
         ],
       ),

@@ -5,7 +5,8 @@
  * recommendation, country, and agenda modules into one response for
  * `GET /api/trips/:id/summary`.
  */
-const { getTripById } = require("../data/store");
+const { getTripById } = require("../data/repository");
+const cacheRepository = require("../data/cacheRepository");
 const agendaService = require("./agendaService");
 const countryService = require("./countryService");
 const foursquareService = require("./foursquareService");
@@ -18,7 +19,7 @@ const { HttpError } = require("../lib/http");
  * Protects against partial failures using individual isolated blocks.
  */
 async function generateSummary(tripId, host, scheme, options = {}) {
-  const trip = getTripById(tripId);
+  const trip = await getTripById(tripId, options.userId);
   if (!trip) {
     throw new HttpError(404, "Trip not found.");
   }
@@ -26,6 +27,21 @@ async function generateSummary(tripId, host, scheme, options = {}) {
   const { latitude, longitude, destinationCountry, preferences } = trip;
   const recommendationLimit = options.recommendationLimit ?? 5;
   const recommendationLimits = options.recommendationLimits ?? {};
+  const cacheKey = buildSummaryCacheKey(trip, {
+    availabilityDays: options.availabilityDays,
+    recommendationLimit,
+    recommendationLimits,
+    routeMapDayIndexes: options.routeMapDayIndexes,
+    routeMapDays: options.routeMapDays,
+  });
+  const cachedSummary = await cacheRepository.getCachedValue(
+    "trip_summary",
+    cacheKey,
+  );
+  if (cachedSummary !== undefined) {
+    return cachedSummary;
+  }
+
   const resolvedDestinationCountryPromise = resolveDestinationCountry(trip);
   const preference =
     Array.isArray(preferences) && preferences.length > 0
@@ -151,7 +167,7 @@ async function generateSummary(tripId, host, scheme, options = {}) {
     });
   }
 
-  return {
+  const summary = {
     trip: responseTrip,
     weather,
     dailyWeatherForecast,
@@ -166,6 +182,10 @@ async function generateSummary(tripId, host, scheme, options = {}) {
     tripAgenda,
     agenda: tripAgenda,
   };
+  await cacheRepository.setCachedValue("trip_summary", cacheKey, summary, {
+    metadata: { tripId },
+  });
+  return summary;
 }
 
 module.exports = {
@@ -203,4 +223,25 @@ function buildUnavailableDailyWeatherForecast(trip, message) {
       "Daily forecast unavailable for this trip date range.",
     daily: [],
   };
+}
+
+function buildSummaryCacheKey(trip, options) {
+  return [
+    trip.id,
+    trip.updatedAt ?? "",
+    stableStringify(options),
+  ].join(":");
+}
+
+function stableStringify(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
 }

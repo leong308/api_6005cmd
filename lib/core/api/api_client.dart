@@ -21,11 +21,16 @@ class ApiClient {
 
   final http.Client _httpClient;
   final String _baseUrl;
+  String? _authToken;
+
+  void setAuthToken(String? token) {
+    _authToken = token;
+  }
 
   Future<Map<String, dynamic>> getJson(String path) async {
     try {
       final response = await _httpClient
-          .get(_uri(path))
+          .get(_uri(path), headers: _headers())
           .timeout(ApiConfig.requestTimeout);
       return _decodeObject(response);
     } on TimeoutException {
@@ -46,7 +51,7 @@ class ApiClient {
       final response = await _httpClient
           .post(
             _uri(path),
-            headers: const {'Content-Type': 'application/json'},
+            headers: _headers(contentType: true),
             body: jsonEncode(body),
           )
           .timeout(ApiConfig.requestTimeout);
@@ -69,7 +74,7 @@ class ApiClient {
       final response = await _httpClient
           .put(
             _uri(path),
-            headers: const {'Content-Type': 'application/json'},
+            headers: _headers(contentType: true),
             body: jsonEncode(body),
           )
           .timeout(ApiConfig.requestTimeout);
@@ -90,6 +95,14 @@ class ApiClient {
         : _baseUrl;
     final normalizedPath = path.startsWith('/') ? path : '/$path';
     return Uri.parse('$base$normalizedPath');
+  }
+
+  Map<String, String> _headers({bool contentType = false}) {
+    return {
+      if (contentType) 'Content-Type': 'application/json',
+      if (_authToken != null && _authToken!.isNotEmpty)
+        'Authorization': 'Bearer $_authToken',
+    };
   }
 
   Map<String, dynamic> _decodeObject(http.Response response) {
