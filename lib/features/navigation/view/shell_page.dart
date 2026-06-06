@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:api_6005cmd/app/theme/app_palette.dart';
 import 'package:api_6005cmd/core/api/api_client.dart';
 import 'package:api_6005cmd/features/add_trip/view/add_trip_page.dart';
@@ -6,11 +8,13 @@ import 'package:api_6005cmd/features/api_demo/view/api_demo_page.dart';
 import 'package:api_6005cmd/features/edit_trip/data/edit_trip_data_source.dart';
 import 'package:api_6005cmd/features/edit_trip/view/edit_trip_page.dart';
 import 'package:api_6005cmd/features/navigation/model/app_section.dart';
+import 'package:api_6005cmd/features/navigation/view/first_login_tour.dart';
 import 'package:api_6005cmd/features/trip_list/data/trip_list_data_source.dart';
 import 'package:api_6005cmd/features/trip_list/view/trip_list_page.dart';
 import 'package:api_6005cmd/features/trip_summary/data/trip_summary_data_source.dart';
 import 'package:api_6005cmd/features/trip_summary/view/trip_summary_page.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ShellPage extends StatefulWidget {
   const ShellPage({super.key});
@@ -30,10 +34,29 @@ class _ShellPageState extends State<ShellPage> {
     _tripListDataSource,
   );
   final ApiDemoDataSource _apiDemoDataSource = const ApiDemoDataSource();
+  final AppTourOverlayController _tourController = AppTourOverlayController();
+  final GlobalKey _tourAppIdentityKey = GlobalKey(
+    debugLabel: 'tour-app-identity',
+  );
+  final GlobalKey _tourMainCanvasKey = GlobalKey(
+    debugLabel: 'tour-main-canvas',
+  );
+  final GlobalKey _tourLogoutKey = GlobalKey(debugLabel: 'tour-logout');
+  late final Map<AppSection, GlobalKey> _tourSectionKeys = {
+    for (final section in AppSection.values)
+      section: GlobalKey(debugLabel: 'tour-${section.name}-navigation'),
+  };
 
   AppSection _section = AppSection.tripList;
   String _selectedTripId = '';
   _AuthenticatedUser? _user;
+  String? _activeTourPreferenceKey;
+
+  @override
+  void dispose() {
+    _tourController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -67,6 +90,9 @@ class _ShellPageState extends State<ShellPage> {
                 child: Row(
                   children: [
                     _DesktopSidebar(
+                      appIdentityKey: _tourAppIdentityKey,
+                      sectionKeys: _tourSectionKeys,
+                      logoutKey: _tourLogoutKey,
                       section: _section,
                       user: _user!,
                       onLogout: _logout,
@@ -75,9 +101,12 @@ class _ShellPageState extends State<ShellPage> {
                     Expanded(
                       child: Padding(
                         padding: const EdgeInsets.all(16),
-                        child: _MainCanvas(
-                          section: _section,
-                          child: _buildSectionView(),
+                        child: KeyedSubtree(
+                          key: _tourMainCanvasKey,
+                          child: _MainCanvas(
+                            section: _section,
+                            child: _buildSectionView(),
+                          ),
                         ),
                       ),
                     ),
@@ -90,9 +119,10 @@ class _ShellPageState extends State<ShellPage> {
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Smart Travel Planner'),
+            title: Text('Smart Travel Planner', key: _tourAppIdentityKey),
             actions: [
               IconButton(
+                key: _tourLogoutKey,
                 tooltip: 'Logout',
                 onPressed: _logout,
                 icon: const Icon(Icons.logout_rounded),
@@ -104,9 +134,12 @@ class _ShellPageState extends State<ShellPage> {
             child: SafeArea(
               child: Padding(
                 padding: const EdgeInsets.all(12),
-                child: _MainCanvas(
-                  section: _section,
-                  child: _buildSectionView(),
+                child: KeyedSubtree(
+                  key: _tourMainCanvasKey,
+                  child: _MainCanvas(
+                    section: _section,
+                    child: _buildSectionView(),
+                  ),
                 ),
               ),
             ),
@@ -116,6 +149,7 @@ class _ShellPageState extends State<ShellPage> {
             destinations: AppSection.values
                 .map(
                   (section) => NavigationDestination(
+                    key: _tourSectionKeys[section],
                     icon: Icon(section.icon),
                     label: section.title,
                   ),
@@ -193,9 +227,12 @@ class _ShellPageState extends State<ShellPage> {
       _selectedTripId = '';
       _section = AppSection.tripList;
     });
+    unawaited(_maybeStartFirstLoginTour(user));
   }
 
   void _logout() {
+    _tourController.cancel();
+    _activeTourPreferenceKey = null;
     _apiClient.setAuthToken(null);
     _tripListDataSource.clearKnownTrips();
     setState(() {
@@ -203,6 +240,155 @@ class _ShellPageState extends State<ShellPage> {
       _selectedTripId = '';
       _section = AppSection.tripList;
     });
+  }
+
+  Future<void> _maybeStartFirstLoginTour(_AuthenticatedUser user) async {
+    final preferenceKey = _tourPreferenceKey(user);
+    final preferences = await SharedPreferences.getInstance();
+    if (!mounted ||
+        _user?.id != user.id ||
+        _user?.email != user.email ||
+        (preferences.getBool(preferenceKey) ?? false)) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _user?.id != user.id || _user?.email != user.email) {
+        return;
+      }
+      _activeTourPreferenceKey = preferenceKey;
+      unawaited(
+        _tourController.start(
+          context: context,
+          steps: _buildFirstLoginTourSteps(),
+          onComplete: () => _finishFirstLoginTour(restoreHome: true),
+          onSkip: () => _finishFirstLoginTour(restoreHome: true),
+        ),
+      );
+    });
+  }
+
+  String _tourPreferenceKey(_AuthenticatedUser user) {
+    final userKey = user.id.isNotEmpty ? user.id : user.email.toLowerCase();
+    return 'smart_travel.first_login_tour.completed.${Uri.encodeComponent(userKey)}';
+  }
+
+  List<AppTourStep> _buildFirstLoginTourSteps() {
+    return [
+      AppTourStep(
+        targetKey: _tourAppIdentityKey,
+        title: 'Smart Travel Planner',
+        description:
+            'Use this workspace to manage trips, generate summaries, and test API coverage.',
+        beforeShow: () => _prepareTourSection(AppSection.tripList),
+      ),
+      _navigationTourStep(
+        AppSection.tripList,
+        'Return here to browse trips, search filters, and open a selected summary.',
+      ),
+      _sectionTourStep(
+        AppSection.tripList,
+        'Home / Trip List',
+        'Search and preference chips narrow the trip list before opening a trip.',
+      ),
+      _navigationTourStep(
+        AppSection.addTrip,
+        'Create a trip with dates, preferences, notes, and a pinned location.',
+      ),
+      _sectionTourStep(
+        AppSection.addTrip,
+        'Add Trip',
+        'The form builds a POST payload and validates dates before submission.',
+      ),
+      _navigationTourStep(
+        AppSection.tripSummary,
+        'Review weather, agenda, recommendations, routes, and JSON output here.',
+      ),
+      _sectionTourStep(
+        AppSection.tripSummary,
+        'Trip Summary',
+        'Select a trip first; this page then shows combined external data.',
+      ),
+      _navigationTourStep(
+        AppSection.editTrip,
+        'Edit an existing record after choosing a trip from Home.',
+      ),
+      _sectionTourStep(
+        AppSection.editTrip,
+        'Edit Trip',
+        'This interface updates trip fields and previews the PUT payload.',
+      ),
+      _navigationTourStep(
+        AppSection.apiDemo,
+        'Inspect backend and external endpoint coverage here.',
+      ),
+      _sectionTourStep(
+        AppSection.apiDemo,
+        'Testing / API Demo',
+        'Use this section when checking API base URLs and endpoint groups.',
+      ),
+      AppTourStep(
+        targetKey: _tourLogoutKey,
+        title: 'Logout',
+        description: 'Sign out here when you are finished.',
+        beforeShow: () => _prepareTourSection(AppSection.tripList),
+      ),
+    ];
+  }
+
+  AppTourStep _navigationTourStep(AppSection section, String description) {
+    return AppTourStep(
+      targetKey: _tourSectionKeys[section]!,
+      title: section.title,
+      description: description,
+      beforeShow: () => _prepareTourSection(section),
+    );
+  }
+
+  AppTourStep _sectionTourStep(
+    AppSection section,
+    String title,
+    String description,
+  ) {
+    return AppTourStep(
+      targetKey: _tourMainCanvasKey,
+      title: title,
+      description: description,
+      beforeShow: () => _prepareTourSection(section),
+    );
+  }
+
+  Future<void> _prepareTourSection(AppSection section) async {
+    if (!mounted) {
+      return;
+    }
+    if (_section != section) {
+      setState(() {
+        _section = section;
+      });
+    }
+    await WidgetsBinding.instance.endOfFrame;
+    await Future<void>.delayed(const Duration(milliseconds: 260));
+  }
+
+  void _finishFirstLoginTour({required bool restoreHome}) {
+    final preferenceKey = _activeTourPreferenceKey;
+    _activeTourPreferenceKey = null;
+    if (restoreHome &&
+        mounted &&
+        _user != null &&
+        _section != AppSection.tripList) {
+      setState(() {
+        _section = AppSection.tripList;
+      });
+    }
+    if (preferenceKey != null) {
+      unawaited(
+        SharedPreferences.getInstance().then(
+          (preferences) => preferences.setBool(preferenceKey, true),
+        ),
+      );
+    }
   }
 }
 
@@ -442,12 +628,18 @@ class _AuthGateState extends State<_AuthGate> {
 
 class _DesktopSidebar extends StatelessWidget {
   const _DesktopSidebar({
+    required this.appIdentityKey,
+    required this.sectionKeys,
+    required this.logoutKey,
     required this.section,
     required this.user,
     required this.onLogout,
     required this.onSectionChanged,
   });
 
+  final GlobalKey appIdentityKey;
+  final Map<AppSection, GlobalKey> sectionKeys;
+  final GlobalKey logoutKey;
   final AppSection section;
   final _AuthenticatedUser user;
   final VoidCallback onLogout;
@@ -464,6 +656,7 @@ class _DesktopSidebar extends StatelessWidget {
       child: Column(
         children: [
           Container(
+            key: appIdentityKey,
             width: double.infinity,
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -511,6 +704,7 @@ class _DesktopSidebar extends StatelessWidget {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 6),
                   child: _SidebarNavItem(
+                    key: sectionKeys[entry],
                     entry: entry,
                     selected: section == entry,
                     onTap: () => onSectionChanged(entry),
@@ -521,6 +715,7 @@ class _DesktopSidebar extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
+            key: logoutKey,
             onPressed: onLogout,
             icon: const Icon(Icons.logout_rounded, size: 18),
             label: const Text('Logout'),
@@ -548,6 +743,7 @@ class _MainCanvas extends StatelessWidget {
 
 class _SidebarNavItem extends StatefulWidget {
   const _SidebarNavItem({
+    super.key,
     required this.entry,
     required this.selected,
     required this.onTap,

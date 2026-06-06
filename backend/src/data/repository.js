@@ -250,6 +250,38 @@ async function setUserEmailVerification(userId, verification) {
     : null;
 }
 
+async function deleteExpiredUnverifiedUsers(referenceDate = new Date()) {
+  if (!isMongoConfigured()) {
+    return localStore.deleteExpiredUnverifiedUsers(referenceDate);
+  }
+
+  const referenceIso = referenceDate.toISOString();
+  const collection = await usersCollection();
+  const expiredUsers = await collection
+    .find(
+      {
+        emailVerified: { $ne: true },
+        emailVerificationExpiresAt: { $lte: referenceIso },
+      },
+      { projection: { id: 1 } },
+    )
+    .toArray();
+  const expiredUserIds = expiredUsers.map((user) => user.id).filter(Boolean);
+  if (expiredUserIds.length === 0) {
+    return 0;
+  }
+
+  const result = await collection.deleteMany({
+    id: { $in: expiredUserIds },
+    emailVerified: { $ne: true },
+    emailVerificationExpiresAt: { $lte: referenceIso },
+  });
+  await (await tripsCollection()).deleteMany({
+    ownerUserId: { $in: expiredUserIds },
+  });
+  return result.deletedCount ?? 0;
+}
+
 async function tripsCollection() {
   return (await getDb()).collection(TRIPS_COLLECTION);
 }
@@ -388,6 +420,7 @@ function tripOwnerQuery(id, ownerUserId) {
 module.exports = {
   createTrip,
   createUser,
+  deleteExpiredUnverifiedUsers,
   deleteTrip,
   getTripById,
   getTripCountryInfo,
