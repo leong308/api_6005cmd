@@ -54,7 +54,9 @@ async function generateSummary(tripId, host, scheme, options = {}) {
       const result = await tripWeatherService.fetchCurrentWeatherForTrip(trip);
       return result.data;
     } catch (err) {
-      console.error(`Graceful partial failure: Open-Meteo failed - ${err.message}`);
+      console.error(
+        `Graceful partial failure: weather providers failed - ${err.message}`,
+      );
       return null;
     }
   })();
@@ -64,7 +66,9 @@ async function generateSummary(tripId, host, scheme, options = {}) {
       const result = await tripWeatherService.fetchDailyForecastForTrip(trip);
       return result.data;
     } catch (err) {
-      console.error(`Graceful partial failure: Open-Meteo daily forecast failed - ${err.message}`);
+      console.error(
+        `Graceful partial failure: weather forecast providers failed - ${err.message}`,
+      );
       return buildUnavailableDailyWeatherForecast(trip, err.message);
     }
   })();

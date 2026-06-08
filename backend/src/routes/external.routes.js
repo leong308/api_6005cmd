@@ -73,7 +73,7 @@ externalRouter.get("/weather", async (req, res, next) => {
 
     return res.json({
       success: true,
-      provider: "open-meteo",
+      provider: data.provider ?? "weather-fallback-chain",
       data,
     });
   } catch (error) {
@@ -94,7 +94,7 @@ externalRouter.get("/weather/forecast", async (req, res, next) => {
 
     return res.json({
       success: true,
-      provider: "open-meteo",
+      provider: data.provider ?? "weather-fallback-chain",
       data,
     });
   } catch (error) {

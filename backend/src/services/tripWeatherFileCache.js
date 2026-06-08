@@ -26,6 +26,7 @@ async function getWeatherCacheEntry(trip, entryName, cacheKey) {
 
   return {
     data: entry.data,
+    provider: entry.provider,
     cachedAt: entry.cachedAt,
     expiresAt: entry.expiresAt,
   };
@@ -40,6 +41,7 @@ async function getStaleWeatherCacheEntry(trip, entryName, cacheKey) {
 
   return {
     data: entry.data,
+    provider: entry.provider,
     cachedAt: entry.cachedAt,
     expiresAt: entry.expiresAt,
   };

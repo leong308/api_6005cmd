@@ -79,7 +79,7 @@ tripRouter.get("/:id/weather", async (req, res, next) => {
 
     return res.json({
       success: true,
-      provider: "open-meteo",
+      provider: result.provider ?? "weather-fallback-chain",
       tripId: req.params.id,
       cached: result.cached,
       stale: result.stale,
@@ -102,7 +102,7 @@ tripRouter.get("/:id/weather/forecast", async (req, res, next) => {
 
     return res.json({
       success: true,
-      provider: "open-meteo",
+      provider: result.provider ?? "weather-fallback-chain",
       tripId: req.params.id,
       cached: result.cached,
       stale: result.stale,

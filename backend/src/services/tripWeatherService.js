@@ -1,8 +1,9 @@
 /**
  * Trip-aware weather service.
  *
- * Wraps Open-Meteo calls with one-file-per-trip caching so repeated trip
- * screens, summaries, and agenda generation do not repeatedly call providers.
+ * Wraps fallback weather provider calls with one-file-per-trip caching so
+ * repeated trip screens, summaries, and agenda generation do not repeatedly
+ * call providers.
  */
 const weatherFileCache = require("./tripWeatherFileCache");
 const weatherService = require("./weatherService");
@@ -26,6 +27,7 @@ async function fetchCurrentWeatherForTrip(trip) {
   if (cached) {
     return {
       data: cached.data,
+      provider: cached.provider ?? cached.data?.provider ?? "weather-cache",
       cached: true,
       stale: false,
     };
@@ -42,10 +44,11 @@ async function fetchCurrentWeatherForTrip(trip) {
       cacheKey,
       data,
       ttlMs: CURRENT_WEATHER_TTL_MS,
-      provider: "open-meteo",
+      provider: data.provider ?? "weather-fallback-chain",
     });
     return {
       data,
+      provider: data.provider ?? "weather-fallback-chain",
       cached: false,
       stale: false,
     };
@@ -58,6 +61,7 @@ async function fetchCurrentWeatherForTrip(trip) {
     if (stale) {
       return {
         data: stale.data,
+        provider: stale.provider ?? stale.data?.provider ?? "weather-cache",
         cached: true,
         stale: true,
         warning: `Provider failed; serving stale cached weather. ${error.message}`,
@@ -77,6 +81,7 @@ async function fetchDailyForecastForTrip(trip) {
   if (cached) {
     return {
       data: cached.data,
+      provider: cached.provider ?? cached.data?.provider ?? "weather-cache",
       cached: true,
       stale: false,
     };
@@ -95,10 +100,11 @@ async function fetchDailyForecastForTrip(trip) {
       cacheKey,
       data,
       ttlMs: DAILY_FORECAST_TTL_MS,
-      provider: "open-meteo",
+      provider: data.provider ?? "weather-fallback-chain",
     });
     return {
       data,
+      provider: data.provider ?? "weather-fallback-chain",
       cached: false,
       stale: false,
     };
@@ -111,6 +117,7 @@ async function fetchDailyForecastForTrip(trip) {
     if (stale) {
       return {
         data: stale.data,
+        provider: stale.provider ?? stale.data?.provider ?? "weather-cache",
         cached: true,
         stale: true,
         warning: `Provider failed; serving stale cached forecast. ${error.message}`,

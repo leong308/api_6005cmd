@@ -38,13 +38,15 @@ class ApiDemoDataSource {
       ApiEndpointModel(
         method: 'GET',
         path: '/trips/:id/weather',
-        description: 'Open-Meteo lookup by trip coordinates.',
+        description:
+            'Weather lookup by trip coordinates with provider fallback.',
         group: EndpointGroup.externalData,
       ),
       ApiEndpointModel(
         method: 'GET',
         path: '/trips/:id/weather/forecast',
-        description: 'Open-Meteo daily forecast for the trip date range.',
+        description:
+            'Daily forecast for the trip date range with provider fallback.',
         group: EndpointGroup.externalData,
       ),
       ApiEndpointModel(

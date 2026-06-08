@@ -129,7 +129,7 @@ async function buildTimedTripAgenda({
     tripDays: dates.length,
     pattern: "food - place - food - place - place - food - place",
     source: {
-      weather: "open-meteo",
+      weather: dailyWeatherForecast?.provider ?? "weather-fallback-chain",
       recommendations: "foursquare with Geoapify Places fallback",
       availability: "foursquare open_at filter with Geoapify fallback",
       strategy:
@@ -177,7 +177,7 @@ async function buildTripAgenda({
     tripDays: dates.length,
     pattern: "food - place - food - place - place - food - place",
     source: {
-      weather: "open-meteo",
+      weather: dailyWeatherForecast?.provider ?? "weather-fallback-chain",
       recommendations: "foursquare with Geoapify Places fallback",
       availability: "fallback recommendation rotation",
       strategy: "date + preference + weather rotation",
