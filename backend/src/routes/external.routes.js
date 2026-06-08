@@ -69,7 +69,11 @@ function ensureRouteCoordinates(req) {
 externalRouter.get("/weather", async (req, res, next) => {
   try {
     const { latitude, longitude } = ensureCoordinates(req);
-    const data = await weatherService.fetchCurrentWeather(latitude, longitude);
+    const data = await weatherService.fetchCurrentWeather(latitude, longitude, {
+      forceRefresh: parseBooleanQuery(
+        req.query.refresh ?? req.query.forceRefresh,
+      ),
+    });
 
     return res.json({
       success: true,
@@ -90,6 +94,11 @@ externalRouter.get("/weather/forecast", async (req, res, next) => {
       longitude,
       startDate,
       endDate,
+      {
+        forceRefresh: parseBooleanQuery(
+          req.query.refresh ?? req.query.forceRefresh,
+        ),
+      },
     );
 
     return res.json({
@@ -156,6 +165,9 @@ externalRouter.get("/recommendations", async (req, res, next) => {
     const limitsByPreference = parseRecommendationLimits(
       req.query.recommendationLimits ?? req.query.limits,
     );
+    const forceRefresh = parseBooleanQuery(
+      req.query.refresh ?? req.query.forceRefresh,
+    );
     const data = preferences.length > 0
       ? await foursquareService.fetchRecommendationGroups({
           latitude,
@@ -163,12 +175,14 @@ externalRouter.get("/recommendations", async (req, res, next) => {
           preferences,
           limit,
           limitsByPreference,
+          forceRefresh,
         })
       : await foursquareService.fetchRecommendations({
           latitude,
           longitude,
           preference,
           limit,
+          forceRefresh,
         });
 
     return res.json({
@@ -194,6 +208,12 @@ function parsePreferenceList(value) {
 function parseRecommendationLimit(value) {
   const parsed = Number(value);
   return [3, 5, 10].includes(parsed) ? parsed : 5;
+}
+
+function parseBooleanQuery(value) {
+  return ["1", "true", "yes", "force"].includes(
+    String(value ?? "").trim().toLowerCase(),
+  );
 }
 
 function parseRecommendationLimits(value) {

@@ -13,6 +13,7 @@ class TripSummaryDataSource {
     int routeMapDays = 0,
     Set<int> routeMapDayIndexes = const {},
     int availabilityDays = 1,
+    bool forceRefresh = false,
   }) async {
     if (tripId.trim().isEmpty) {
       return null;
@@ -24,6 +25,7 @@ class TripSummaryDataSource {
         routeMapDays: routeMapDays,
         routeMapDayIndexes: routeMapDayIndexes,
         availabilityDays: availabilityDays,
+        forceRefresh: forceRefresh,
       );
       final response = await tripDataSource.apiClient.getJson(
         '/trips/$tripId/summary$query',
@@ -84,6 +86,7 @@ String _summaryQuery({
   required int routeMapDays,
   required Set<int> routeMapDayIndexes,
   required int availabilityDays,
+  required bool forceRefresh,
 }) {
   final safeLimits = recommendationLimits.entries
       .where((entry) => [3, 5, 10].contains(entry.value))
@@ -94,6 +97,9 @@ String _summaryQuery({
     'routeMapDays': routeMapDays.clamp(0, 21).toString(),
     'availabilityDays': availabilityDays.clamp(0, 7).toString(),
   };
+  if (forceRefresh) {
+    queryParameters['refresh'] = 'true';
+  }
   final safeRouteDayIndexes = routeMapDayIndexes
       .where((index) => index >= 0 && index < 21)
       .toList()

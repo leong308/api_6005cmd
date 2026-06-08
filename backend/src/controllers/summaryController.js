@@ -26,6 +26,9 @@ async function getTripSummary(req, res, next) {
       req.query.routeMapDayIndexes,
     );
     const availabilityDays = parseAvailabilityDays(req.query.availabilityDays);
+    const forceRefresh = parseBooleanQuery(
+      req.query.refresh ?? req.query.forceRefresh,
+    );
 
     const summaryData = await summaryService.generateSummary(
       tripId,
@@ -37,6 +40,7 @@ async function getTripSummary(req, res, next) {
         routeMapDays,
         routeMapDayIndexes,
         availabilityDays,
+        forceRefresh,
         userId: req.user.id,
       },
     );
@@ -104,6 +108,12 @@ function parseAvailabilityDays(value) {
     return 1;
   }
   return Math.min(Math.max(parsed, 0), 7);
+}
+
+function parseBooleanQuery(value) {
+  return ["1", "true", "yes", "force"].includes(
+    String(value ?? "").trim().toLowerCase(),
+  );
 }
 
 module.exports = {

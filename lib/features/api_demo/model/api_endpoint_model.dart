@@ -1,4 +1,5 @@
 enum EndpointGroup {
+  system,
   tripCrud,
   externalData,
   combinedOutput,

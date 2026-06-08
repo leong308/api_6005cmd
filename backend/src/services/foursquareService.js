@@ -78,6 +78,7 @@ async function fetchRecommendations({
   preference = "family",
   limit = DEFAULT_LIMIT,
   openAt = "",
+  forceRefresh = false,
 }) {
   validateCoordinates(latitude, longitude);
 
@@ -94,7 +95,7 @@ async function fetchRecommendations({
     "recommendations",
     key,
   );
-  if (mongoCached !== undefined) {
+  if (!forceRefresh && mongoCached !== undefined) {
     cache.set(key, {
       data: mongoCached,
       expiresAt: Date.now() + CACHE_TTL_MS,
@@ -103,7 +104,7 @@ async function fetchRecommendations({
   }
 
   const cached = cache.get(key);
-  if (cached && cached.expiresAt > Date.now()) {
+  if (!forceRefresh && cached && cached.expiresAt > Date.now()) {
     return cached.data;
   }
 
@@ -164,6 +165,7 @@ async function fetchRecommendations({
     preference: normalizedPreference,
     limit: normalizedLimit,
     openAt: normalizeOpenAt(openAt),
+    forceRefresh,
   }).catch((error) => {
     console.error(
       `Geoapify fallback failed for ${normalizedPreference}: ${error.message}`,
@@ -184,6 +186,7 @@ async function fetchRecommendationGroups({
   preferences = [],
   limit = DEFAULT_LIMIT,
   limitsByPreference = {},
+  forceRefresh = false,
 }) {
   const normalizedPreferences = normalizePreferences(preferences);
   const normalizedLimit = clampLimit(limit);
@@ -203,6 +206,7 @@ async function fetchRecommendationGroups({
           longitude,
           preference,
           limit: groupLimit,
+          forceRefresh,
         }),
       };
     }),

@@ -80,6 +80,7 @@ async function fetchGeoapifyRecommendations({
   preference = "family",
   limit = DEFAULT_LIMIT,
   openAt = "",
+  forceRefresh = false,
 }) {
   validateCoordinates(latitude, longitude);
 
@@ -93,7 +94,7 @@ async function fetchGeoapifyRecommendations({
     normalizeOpenAt(openAt),
   );
   const cached = cache.get(key);
-  if (cached && cached.expiresAt > Date.now()) {
+  if (!forceRefresh && cached && cached.expiresAt > Date.now()) {
     return cached.data;
   }
 
@@ -145,6 +146,7 @@ async function fetchGeoapifyRecommendationGroups({
   preferences = [],
   limit = DEFAULT_LIMIT,
   limitsByPreference = {},
+  forceRefresh = false,
 }) {
   const normalizedPreferences = normalizePreferences(preferences);
   const normalizedLimit = clampLimit(limit);
@@ -164,6 +166,7 @@ async function fetchGeoapifyRecommendationGroups({
           longitude,
           preference,
           limit: groupLimit,
+          forceRefresh,
         }),
       };
     }),

@@ -17,17 +17,34 @@ class ApiDemoPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final endpoints = dataSource.endpoints();
+    final totalEndpoints = endpoints.length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(
-          title: 'Testing / API Demo',
+        SectionHeader(
+          title: 'API / Testing Demo',
+          trailing: Text(
+            '$totalEndpoints endpoints',
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(color: AppPalette.inkA(0.66)),
+          ),
         ),
         const SizedBox(height: 16),
         Expanded(
           child: ListView(
             children: [
               const _EnvironmentCard(),
+              const SizedBox(height: 12),
+              _EndpointGroupTile(
+                title: 'System',
+                subtitle: 'Health and diagnostics',
+                color: AppPalette.inkA(0.05),
+                endpoints: endpoints
+                    .where((e) => e.group == EndpointGroup.system)
+                    .toList(),
+              ),
               const SizedBox(height: 12),
               _EndpointGroupTile(
                 title: 'Trip CRUD',
@@ -58,7 +75,7 @@ class ApiDemoPage extends StatelessWidget {
               const SizedBox(height: 12),
               _EndpointGroupTile(
                 title: 'Optional Authentication',
-                subtitle: 'JWT-ready placeholders',
+                subtitle: 'Auth, verification, and user profile',
                 color: AppPalette.inkA(0.06),
                 endpoints: endpoints
                     .where((e) => e.group == EndpointGroup.optionalAuth)
@@ -82,14 +99,19 @@ class _EnvironmentCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('API Integration Ready', style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'API Integration Ready',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: 8),
           _line('Self API Base URL', ApiConfig.selfApiBaseUrl),
           _line('External Proxy Base URL', ApiConfig.externalProxyBaseUrl),
           _line('Timeout', '${ApiConfig.requestTimeout.inSeconds}s'),
           const SizedBox(height: 8),
           Text(
-            'Keep API keys in environment variables, never hardcoded.',
+            'Refresh External Data sends refresh=true, bypasses external caches, '
+            'and replaces Mongo cache when fresh data is returned. Keep API keys '
+            'in environment variables.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: AppPalette.inkA(0.64),
                 ),

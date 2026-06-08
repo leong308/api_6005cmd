@@ -310,7 +310,7 @@ class _ShellPageState extends State<ShellPage> {
       ),
       _sectionTourStep(
         AppSection.apiDemo,
-        'Testing / API Demo',
+        'API / Testing Demo',
         'Use this section when checking API base URLs and endpoint groups.',
       ),
       AppTourStep(

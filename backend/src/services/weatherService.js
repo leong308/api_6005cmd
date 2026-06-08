@@ -71,12 +71,12 @@ function validateCoordinates(latitude, longitude) {
   }
 }
 
-async function fetchCurrentWeather(latitude, longitude) {
+async function fetchCurrentWeather(latitude, longitude, options = {}) {
   validateCoordinates(latitude, longitude);
 
   const key = cacheKey(latitude, longitude);
   const cached = currentCache.get(key);
-  if (cached && cached.expiresAt > Date.now()) {
+  if (!options.forceRefresh && cached && cached.expiresAt > Date.now()) {
     return cached.data;
   }
 
@@ -103,7 +103,13 @@ async function fetchCurrentWeather(latitude, longitude) {
   return data;
 }
 
-async function fetchDailyForecast(latitude, longitude, startDate, endDate) {
+async function fetchDailyForecast(
+  latitude,
+  longitude,
+  startDate,
+  endDate,
+  options = {},
+) {
   validateCoordinates(latitude, longitude);
   const normalizedStartDate = parseIsoDate(startDate, "startDate");
   const normalizedEndDate = parseIsoDate(endDate, "endDate");
@@ -111,7 +117,7 @@ async function fetchDailyForecast(latitude, longitude, startDate, endDate) {
 
   const key = `${cacheKey(latitude, longitude)},${normalizedStartDate},${normalizedEndDate}`;
   const cached = dailyForecastCache.get(key);
-  if (cached && cached.expiresAt > Date.now()) {
+  if (!options.forceRefresh && cached && cached.expiresAt > Date.now()) {
     return cached.data;
   }
 

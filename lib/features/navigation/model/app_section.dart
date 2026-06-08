@@ -20,7 +20,7 @@ extension AppSectionMeta on AppSection {
       case AppSection.editTrip:
         return 'Edit Trip';
       case AppSection.apiDemo:
-        return 'Testing / API Demo';
+        return 'API / Testing Demo';
     }
   }
 
