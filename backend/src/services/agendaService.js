@@ -122,6 +122,13 @@ async function buildTimedTripAgenda({
       usedIds,
     }),
   );
+  if (!hasAgendaItems(days)) {
+    return buildInsufficientAgenda({
+      dates,
+      dailyWeatherForecast,
+      strategy: "Need live recommendation or availability data before agenda generation.",
+    });
+  }
 
   return {
     title: "Open-now timed tour guide",
@@ -170,6 +177,13 @@ async function buildTripAgenda({
       usedIds,
     }),
   );
+  if (!hasAgendaItems(days)) {
+    return buildInsufficientAgenda({
+      dates,
+      dailyWeatherForecast,
+      strategy: "Need recommendation data before agenda generation.",
+    });
+  }
 
   return {
     title: "Weather-aware tour guide",
@@ -203,6 +217,21 @@ function buildAgendaDay({
   usedIds,
 }) {
   const weatherNote = weatherTip(forecast);
+  const items = scheduledSlots
+    .map((slot) => {
+      const recommendation = selectRecommendation({
+        pool: availabilityPools.get(slot.requestKey) ?? [],
+        fallbackRecommendations,
+        preference: slot.preference,
+        usedIds,
+      });
+      return buildAgendaItem({
+        slot,
+        recommendation,
+        weatherNote,
+      });
+    })
+    .filter(Boolean);
 
   return {
     date,
@@ -219,52 +248,17 @@ function buildAgendaDay({
         }
       : null,
     weatherNote,
-    items: scheduledSlots.map((slot) =>
-      buildAgendaItem({
-        slot,
-        recommendation: selectRecommendation({
-          pool: availabilityPools.get(slot.requestKey) ?? [],
-          fallbackRecommendations,
-          preference: slot.preference,
-          usedIds,
-        }),
-        weatherNote,
-        trip,
-      }),
-    ),
+    items,
   };
 }
 
-function buildAgendaItem({ slot, recommendation, weatherNote, trip }) {
-  const visitWindow = `${slot.startTime} - ${slot.endTime}`;
-  if (recommendation) {
-    const verified = Boolean(
-      recommendation.availability?.verifiedForVisitTime,
-    );
-    return {
-      slot: slot.slot,
-      kind: slot.kind,
-      timeOfDay: slot.timeOfDay,
-      startTime: slot.startTime,
-      endTime: slot.endTime,
-      visitWindow,
-      title: recommendation.name,
-      category: recommendation.category,
-      preference: recommendation.preference ?? slot.preference,
-      description: `${slot.timeOfDay} (${visitWindow}) for ${themeForPreference(slot.preference).toLowerCase()}. ${weatherNote}`,
-      address: recommendation.address,
-      coordinates: recommendation.coordinates,
-      distanceMeters: recommendation.distanceMeters,
-      availability: {
-        openAt: slot.openAt,
-        verifiedForVisitTime: verified,
-        label: verified
-          ? `Foursquare filtered this stop as open at ${slot.openAt}.`
-          : "Opening-time filter unavailable; verify before visiting.",
-        source: recommendation.availability?.source ?? "fallback",
-      },
-    };
+function buildAgendaItem({ slot, recommendation, weatherNote }) {
+  if (!recommendation) {
+    return null;
   }
+
+  const visitWindow = `${slot.startTime} - ${slot.endTime}`;
+  const verified = Boolean(recommendation.availability?.verifiedForVisitTime);
 
   return {
     slot: slot.slot,
@@ -273,21 +267,20 @@ function buildAgendaItem({ slot, recommendation, weatherNote, trip }) {
     startTime: slot.startTime,
     endTime: slot.endTime,
     visitWindow,
-    title: fallbackTitle(slot, trip.destinationName),
-    category: slot.preference,
-    preference: slot.preference,
-    description: `${themeForPreference(slot.preference)} around ${trip.destinationName}. ${weatherNote}`,
-    address: "",
-    coordinates: {
-      latitude: trip.latitude,
-      longitude: trip.longitude,
-    },
-    distanceMeters: 0,
+    title: recommendation.name,
+    category: recommendation.category,
+    preference: recommendation.preference ?? slot.preference,
+    description: `${slot.timeOfDay} (${visitWindow}) for ${themeForPreference(slot.preference).toLowerCase()}. ${weatherNote}`,
+    address: recommendation.address,
+    coordinates: recommendation.coordinates,
+    distanceMeters: recommendation.distanceMeters,
     availability: {
       openAt: slot.openAt,
-      verifiedForVisitTime: false,
-      label: "No open-at venue returned; use as a flexible backup slot.",
-      source: "fallback",
+      verifiedForVisitTime: verified,
+      label: verified
+        ? `Foursquare filtered this stop as open at ${slot.openAt}.`
+        : "Opening-time filter unavailable; verify before visiting.",
+      source: recommendation.availability?.source ?? "recommendation",
     },
   };
 }
@@ -697,6 +690,27 @@ function flattenRecommendations(recommendationGroups = []) {
   );
 }
 
+function hasAgendaItems(days) {
+  return days.some((day) => day.items.length > 0);
+}
+
+function buildInsufficientAgenda({ dates, dailyWeatherForecast, strategy }) {
+  return {
+    title: "Insufficient data to plan an agenda",
+    generatedAt: new Date().toISOString(),
+    tripDays: dates.length,
+    pattern: "",
+    source: {
+      weather: dailyWeatherForecast?.provider ?? "weather-fallback-chain",
+      recommendations: "insufficient",
+      availability: "unavailable",
+      strategy,
+    },
+    days: [],
+    checklist: [],
+  };
+}
+
 function tripDates(startDate, endDate) {
   const start = parseDate(startDate);
   const end = parseDate(endDate);
@@ -770,13 +784,6 @@ function themeForPreference(preference) {
     nightlife: "Evening nightlife",
   };
   return labels[normalized] ?? "Local discovery";
-}
-
-function fallbackTitle(slot, destinationName) {
-  if (slot.kind === "food") {
-    return `${destinationName} ${slot.timeOfDay.toLowerCase()} break`;
-  }
-  return `${destinationName} ${slot.timeOfDay.toLowerCase()}`;
 }
 
 function clampRouteMapDays(value) {

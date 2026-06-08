@@ -664,7 +664,37 @@ class _TripAgendaCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (agenda.days.isEmpty) {
-      return const SizedBox.shrink();
+      return MacPanel(
+        color: AppPalette.mintA(0.07),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.route_rounded, color: AppPalette.mint),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Trip Agenda / Tour Guide',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    agenda.title.toLowerCase().contains('insufficient')
+                        ? agenda.title
+                        : 'Insufficient data to plan an agenda',
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(color: AppPalette.inkA(0.72)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
     }
     final totalStops = agenda.days.fold<int>(0, (total, day) => total + day.items.length);
 

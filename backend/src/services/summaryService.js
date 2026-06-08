@@ -14,6 +14,8 @@ const reverseGeocodeService = require("./reverseGeocodeService");
 const tripWeatherService = require("./tripWeatherService");
 const { HttpError } = require("../lib/http");
 
+const AGENDA_CACHE_VERSION = "no-placeholder-v2";
+
 /**
  * Orchestrates external API calls asynchronously for a specific trip.
  * Protects against partial failures using individual isolated blocks.
@@ -28,6 +30,7 @@ async function generateSummary(tripId, host, scheme, options = {}) {
   const recommendationLimit = options.recommendationLimit ?? 5;
   const recommendationLimits = options.recommendationLimits ?? {};
   const cacheKey = buildSummaryCacheKey(trip, {
+    agendaCacheVersion: AGENDA_CACHE_VERSION,
     availabilityDays: options.availabilityDays,
     recommendationLimit,
     recommendationLimits,

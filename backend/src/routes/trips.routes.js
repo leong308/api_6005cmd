@@ -37,6 +37,7 @@ const REQUIRED_TRIP_FIELDS = [
   "startDate",
   "endDate",
 ];
+const AGENDA_CACHE_VERSION = "no-placeholder-v2";
 
 tripRouter.use(authMiddleware);
 
@@ -182,6 +183,7 @@ tripRouter.get("/:id/agenda", async (req, res, next) => {
       req.query.routeMapDayIndexes,
     );
     const cacheKey = buildTripCacheKey(trip, "agenda", {
+      agendaCacheVersion: AGENDA_CACHE_VERSION,
       availabilityDays,
       limit,
       limitsByPreference,

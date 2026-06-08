@@ -32,10 +32,20 @@ async function getWeatherCacheEntry(trip, entryName, cacheKey) {
   };
 }
 
-async function getStaleWeatherCacheEntry(trip, entryName, cacheKey) {
+async function getStaleWeatherCacheEntry(
+  trip,
+  entryName,
+  cacheKey,
+  { maxAgeMs } = {},
+) {
   const file = await readTripCacheFile(trip.id);
   const entry = file.entries?.[entryName];
   if (!entry || entry.cacheKey !== cacheKey) {
+    return null;
+  }
+
+  if (isOlderThan(entry.cachedAt, maxAgeMs)) {
+    await deleteWeatherCacheEntry(trip.id, entryName, cacheKey);
     return null;
   }
 
@@ -45,6 +55,28 @@ async function getStaleWeatherCacheEntry(trip, entryName, cacheKey) {
     cachedAt: entry.cachedAt,
     expiresAt: entry.expiresAt,
   };
+}
+
+async function deleteWeatherCacheEntry(tripId, entryName, cacheKey) {
+  const file = await readTripCacheFile(tripId);
+  const entry = file.entries?.[entryName];
+  if (!entry || entry.cacheKey !== cacheKey) {
+    return;
+  }
+
+  const nextEntries = { ...(file.entries ?? {}) };
+  delete nextEntries[entryName];
+
+  if (Object.keys(nextEntries).length === 0) {
+    await deleteTripWeatherCache(tripId);
+    return;
+  }
+
+  await writeTripCacheFile(tripId, {
+    ...file,
+    updatedAt: new Date().toISOString(),
+    entries: nextEntries,
+  });
 }
 
 async function setWeatherCacheEntry({
@@ -117,7 +149,21 @@ function safeFileName(value) {
   return String(value).replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
+function isOlderThan(cachedAt, maxAgeMs) {
+  if (!Number.isFinite(maxAgeMs) || maxAgeMs <= 0) {
+    return false;
+  }
+
+  const cachedAtMs = Date.parse(cachedAt ?? "");
+  if (!Number.isFinite(cachedAtMs)) {
+    return true;
+  }
+
+  return Date.now() - cachedAtMs > maxAgeMs;
+}
+
 module.exports = {
+  deleteWeatherCacheEntry,
   deleteTripWeatherCache,
   getStaleWeatherCacheEntry,
   getWeatherCacheEntry,
