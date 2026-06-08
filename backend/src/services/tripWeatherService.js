@@ -16,6 +16,10 @@ const DAILY_FORECAST_TTL_MS = readTtlMs(
   "TRIP_DAILY_FORECAST_CACHE_TTL_MS",
   6 * 60 * 60 * 1000,
 );
+const STALE_WEATHER_BACKUP_TTL_MS = readTtlMs(
+  "TRIP_STALE_WEATHER_BACKUP_TTL_MS",
+  24 * 60 * 60 * 1000,
+);
 
 async function fetchCurrentWeatherForTrip(trip) {
   const cacheKey = buildWeatherCacheKey(trip, "current");
@@ -57,6 +61,7 @@ async function fetchCurrentWeatherForTrip(trip) {
       trip,
       "current",
       cacheKey,
+      { maxAgeMs: STALE_WEATHER_BACKUP_TTL_MS },
     );
     if (stale) {
       return {
@@ -113,6 +118,7 @@ async function fetchDailyForecastForTrip(trip) {
       trip,
       "forecast",
       cacheKey,
+      { maxAgeMs: STALE_WEATHER_BACKUP_TTL_MS },
     );
     if (stale) {
       return {

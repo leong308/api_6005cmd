@@ -38,6 +38,10 @@ GEOAPIFY_TIMEOUT_MS=12000
 NOMINATIM_USER_AGENT=SmartTripPlanner/1.0 (your-email@example.com)
 TRIP_CURRENT_WEATHER_CACHE_TTL_MS=1800000
 TRIP_DAILY_FORECAST_CACHE_TTL_MS=21600000
+TRIP_STALE_WEATHER_BACKUP_TTL_MS=86400000
+WEATHER_PROVIDER_TIMEOUT_MS=12000
+OPENWEATHER_API_KEY=replace_with_your_openweather_api_key
+MET_NORWAY_USER_AGENT=SmartTripPlanner/1.0 (your-email@example.com)
 ```
 
 4. API base URL:
@@ -64,6 +68,10 @@ GEOAPIFY_TIMEOUT_MS=12000
 NOMINATIM_USER_AGENT=SmartTripPlanner/1.0 (your-email@example.com)
 TRIP_CURRENT_WEATHER_CACHE_TTL_MS=1800000
 TRIP_DAILY_FORECAST_CACHE_TTL_MS=21600000
+TRIP_STALE_WEATHER_BACKUP_TTL_MS=86400000
+WEATHER_PROVIDER_TIMEOUT_MS=12000
+OPENWEATHER_API_KEY=<your_openweather_api_key>
+MET_NORWAY_USER_AGENT=SmartTripPlanner/1.0 (your-email@example.com)
 ```
 
 Do not set `PORT`, `NODE_ENV=development`, or SMTP variables on Render Free.
@@ -117,9 +125,9 @@ web API key is in Firebase Console → Project settings → General → Web API 
 - Email verification and password reset emails use `EMAIL_PROVIDER=firebase` by default. Firebase Authentication sends the emails over HTTPS, so it works on Render Free and does not require owning a sender domain. Enable Email/Password in Firebase Authentication and set `FIREBASE_AUTH_API_KEY`.
 - Resend is still supported with `EMAIL_PROVIDER=resend` and `RESEND_API_KEY`, but it requires a verified sender domain before sending to arbitrary recipients. SMTP is also supported with `EMAIL_PROVIDER=smtp`, but do not use SMTP on Render Free. In non-production, non-Firebase delivery failures return `devVerificationUrl` or `devResetUrl` instead of blocking signup/reset.
 - `GET /api/external/reverse-geocode` uses Geoapify reverse geocoding first, caches rounded coordinates to avoid repeated credit use, and falls back without failing the request when providers are unavailable.
-- `GET /api/external/weather`, `GET /api/external/weather/forecast`, `GET /api/trips/:id/weather`, and `GET /api/trips/:id/weather/forecast` use Open-Meteo data and do not require an API key. Trip-specific weather endpoints use one-file-per-trip cache.
+- `GET /api/external/weather`, `GET /api/external/weather/forecast`, `GET /api/trips/:id/weather`, and `GET /api/trips/:id/weather/forecast` use Open-Meteo first, then OpenWeather, then MET Norway if earlier providers fail or hit a limit. OpenWeather requires `OPENWEATHER_API_KEY`; MET Norway is free and requires a descriptive `MET_NORWAY_USER_AGENT`. Trip-specific weather endpoints use one-file-per-trip cache. Expired weather cache can be served as a provider-failure backup for up to `TRIP_STALE_WEATHER_BACKUP_TTL_MS` only; older entries are removed so the next request refetches providers.
 - `GET /api/external/recommendations` and `GET /api/trips/:id/recommendations` use live Foursquare Places data when `FOURSQUARE_API_KEY` is configured in `backend/.env`.
-- `GET /api/trips/:id/agenda` builds a timed food/place tour-guide agenda from trip dates, Open-Meteo forecast, Foursquare recommendation groups, Foursquare `open_at` checks, and Google Routes walking paths. Use `availabilityDays=1..7` and `routeMapDays=1..7` to increase live open-at and route-map coverage for demos.
+- `GET /api/trips/:id/agenda` builds a timed food/place tour-guide agenda from trip dates, weather forecast fallback data, Foursquare recommendation groups, Foursquare `open_at` checks, and Google Routes walking paths. Use `availabilityDays=1..7` and `routeMapDays=1..7` to increase live open-at and route-map coverage for demos. If provider recommendation data is unavailable, the API returns an "Insufficient data to plan an agenda" result instead of hardcoded placeholder stops.
 - `GET /api/external/route` uses Google Maps Routes API when `GOOGLE_ROUTES_API_KEY` is configured in `backend/.env`. Pass `mode=walk` for walking routes or `mode=car` / `mode=vehicle` for Vehicle routes. Vehicle uses Google Routes `DRIVE`.
 - Local development CORS allows configured origins plus any `localhost`, `127.0.0.1`, or `::1` HTTP/HTTPS port, so Flutter web can run on random debug ports.
 - Google Places endpoints are provider-ready stubs returning deterministic payloads.
