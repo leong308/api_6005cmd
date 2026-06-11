@@ -5,6 +5,7 @@ import 'package:api_6005cmd/features/add_trip/data/add_trip_form_data.dart';
 import 'package:api_6005cmd/features/add_trip/model/add_trip_draft_model.dart';
 import 'package:api_6005cmd/features/trip_list/data/trip_list_data_source.dart';
 import 'package:api_6005cmd/shared/view/mac_panel.dart';
+import 'package:api_6005cmd/shared/view/map_selection_guard.dart';
 import 'package:api_6005cmd/shared/view/osm_coordinate_picker.dart';
 import 'package:api_6005cmd/shared/view/section_header.dart';
 import 'package:flutter/material.dart';
@@ -30,6 +31,7 @@ class _AddTripPageState extends State<AddTripPage> {
   late final TextEditingController _endDateController;
   late final TextEditingController _notesController;
   late final Set<String> _selectedPreferences;
+  final MapSelectionGuard _mapSelectionGuard = MapSelectionGuard();
   late double _latitude;
   late double _longitude;
   bool _isSaving = false;
@@ -172,6 +174,9 @@ class _AddTripPageState extends State<AddTripPage> {
         latitude: _latitude,
         longitude: _longitude,
         onCoordinateSelected: (latitude, longitude) {
+          if (!_mapSelectionGuard.acceptsSelection) {
+            return;
+          }
           setState(() {
             _latitude = latitude;
             _longitude = longitude;
@@ -374,15 +379,17 @@ class _AddTripPageState extends State<AddTripPage> {
   String _formatDate(DateTime date) => date.toIso8601String().split('T').first;
 
   Future<void> _pickStartDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _initialDateForPicker(
+    final picked = await _mapSelectionGuard.runWithSelectionBlocked(
+      () => showDatePicker(
+        context: context,
+        initialDate: _initialDateForPicker(
+          firstDate: _minimumStartDate,
+          lastDate: _maximumTripDate,
+          selectedDate: _startDate,
+        ),
         firstDate: _minimumStartDate,
         lastDate: _maximumTripDate,
-        selectedDate: _startDate,
       ),
-      firstDate: _minimumStartDate,
-      lastDate: _maximumTripDate,
     );
     if (picked == null || !mounted) {
       return;
@@ -402,15 +409,17 @@ class _AddTripPageState extends State<AddTripPage> {
     final firstDate = start != null && start.isAfter(_today)
         ? start
         : _minimumStartDate;
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _initialDateForPicker(
+    final picked = await _mapSelectionGuard.runWithSelectionBlocked(
+      () => showDatePicker(
+        context: context,
+        initialDate: _initialDateForPicker(
+          firstDate: firstDate,
+          lastDate: _maximumTripDate,
+          selectedDate: _endDate,
+        ),
         firstDate: firstDate,
         lastDate: _maximumTripDate,
-        selectedDate: _endDate,
       ),
-      firstDate: firstDate,
-      lastDate: _maximumTripDate,
     );
     if (picked == null || !mounted) {
       return;
