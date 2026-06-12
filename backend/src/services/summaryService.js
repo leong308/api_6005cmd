@@ -64,6 +64,9 @@ async function generateSummary(tripId, host, scheme, options = {}) {
     }
   })();
 
+  /**
+   * Supports the daily weather forecast promise backend flow.
+   */
   const dailyWeatherForecastPromise = (async () => {
     try {
       const result = await tripWeatherService.fetchDailyForecastForTrip(trip);
@@ -76,6 +79,9 @@ async function generateSummary(tripId, host, scheme, options = {}) {
     }
   })();
 
+  /**
+   * Supports the google places promise backend flow.
+   */
   const googlePlacesPromise = (async () => {
     try {
       const response = await fetch(
@@ -92,6 +98,9 @@ async function generateSummary(tripId, host, scheme, options = {}) {
     }
   })();
 
+  /**
+   * Supports the recommendation groups promise backend flow.
+   */
   const recommendationGroupsPromise = (async () => {
     try {
       return await foursquareService.fetchRecommendationGroups({
@@ -107,6 +116,9 @@ async function generateSummary(tripId, host, scheme, options = {}) {
     }
   })();
 
+  /**
+   * Supports the country info promise backend flow.
+   */
   const countryInfoPromise = (async () => {
     try {
       const resolvedDestinationCountry = await resolvedDestinationCountryPromise;
@@ -191,6 +203,9 @@ module.exports = {
   generateSummary,
 };
 
+/**
+ * Resolves the destination country value.
+ */
 async function resolveDestinationCountry(trip) {
   const storedCountry = String(trip.destinationCountry ?? "").trim();
   if (storedCountry.length > 0) {
@@ -209,6 +224,9 @@ async function resolveDestinationCountry(trip) {
   }
 }
 
+/**
+ * Builds the unavailable daily weather forecast payload.
+ */
 function buildUnavailableDailyWeatherForecast(trip, message) {
   return {
     latitude: trip.latitude,
@@ -224,6 +242,9 @@ function buildUnavailableDailyWeatherForecast(trip, message) {
   };
 }
 
+/**
+ * Builds the summary cache key payload.
+ */
 function buildSummaryCacheKey(trip, options) {
   return [
     trip.id,
@@ -232,6 +253,9 @@ function buildSummaryCacheKey(trip, options) {
   ].join(":");
 }
 
+/**
+ * Supports the stable stringify backend flow.
+ */
 function stableStringify(value) {
   if (Array.isArray(value)) {
     return `[${value.map(stableStringify).join(",")}]`;

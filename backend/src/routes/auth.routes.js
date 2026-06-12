@@ -120,6 +120,9 @@ authRouter.post("/register", async (req, res, next) => {
   }
 });
 
+/**
+ * Handles GET /verify-email requests for the auth API.
+ */
 authRouter.get("/verify-email", async (req, res, next) => {
   try {
     const token = String(req.query.token ?? "").trim();
@@ -169,6 +172,9 @@ authRouter.get("/verify-email", async (req, res, next) => {
   }
 });
 
+/**
+ * Handles POST /resend-verification requests for the auth API.
+ */
 authRouter.post("/resend-verification", async (req, res, next) => {
   try {
     await cleanupExpiredUnverifiedUsers();
@@ -207,6 +213,9 @@ authRouter.post("/resend-verification", async (req, res, next) => {
   }
 });
 
+/**
+ * Handles POST /forgot-password requests for the auth API.
+ */
 authRouter.post("/forgot-password", async (req, res, next) => {
   try {
     assertRequiredFields(req.body, ["email"]);
@@ -246,6 +255,9 @@ authRouter.post("/forgot-password", async (req, res, next) => {
   }
 });
 
+/**
+ * Handles GET /reset-password requests for the auth API.
+ */
 authRouter.get("/reset-password", async (req, res, next) => {
   try {
     const token = String(req.query.token ?? "").trim();
@@ -279,6 +291,9 @@ authRouter.get("/reset-password", async (req, res, next) => {
   }
 });
 
+/**
+ * Handles POST /reset-password requests for the auth API.
+ */
 authRouter.post("/reset-password", async (req, res, next) => {
   try {
     assertRequiredFields(req.body, ["token", "password"]);
@@ -382,6 +397,9 @@ authRouter.get("/profile", authMiddleware, async (req, res, next) => {
   }
 });
 
+/**
+ * Handles POST /complete-tour requests for the auth API.
+ */
 authRouter.post("/complete-tour", authMiddleware, async (req, res, next) => {
   try {
     const user = await markUserAppTourCompleted(req.user.id);
@@ -405,6 +423,9 @@ authRouter.post("/complete-tour", authMiddleware, async (req, res, next) => {
 
 module.exports = { authRouter };
 
+/**
+ * Creates the firebase auth account data.
+ */
 async function createFirebaseAuthAccount({ email, password }) {
   try {
     return await createFirebaseUser({ email, password });
@@ -423,6 +444,9 @@ async function createFirebaseAuthAccount({ email, password }) {
   }
 }
 
+/**
+ * Supports the authenticate local user backend flow.
+ */
 async function authenticateLocalUser(user, password) {
   if (!user.emailVerified) {
     throw new HttpError(403, "Please verify your email before logging in.");
@@ -436,6 +460,9 @@ async function authenticateLocalUser(user, password) {
   return user;
 }
 
+/**
+ * Supports the authenticate firebase backed user backend flow.
+ */
 async function authenticateFirebaseBackedUser(user, password) {
   let firebaseSession;
   try {
@@ -471,14 +498,23 @@ async function authenticateFirebaseBackedUser(user, password) {
   return user;
 }
 
+/**
+ * Checks whether firebase auth user is true.
+ */
 function isFirebaseAuthUser(user) {
   return user?.emailVerificationProvider === "firebase";
 }
 
+/**
+ * Checks whether firebase error is true.
+ */
 function isFirebaseError(error, code) {
   return String(error?.message ?? "").includes(code);
 }
 
+/**
+ * Builds the verification url payload.
+ */
 function buildVerificationUrl(req, token) {
   const configuredBase = String(process.env.PUBLIC_API_BASE_URL ?? "").trim();
   const baseUrl =
@@ -487,12 +523,18 @@ function buildVerificationUrl(req, token) {
   return `${baseUrl.replace(/\/$/, "")}/api/auth/verify-email?token=${encodeURIComponent(token)}`;
 }
 
+/**
+ * Builds the password reset url payload.
+ */
 function buildPasswordResetUrl(req, token) {
   const configuredBase = String(process.env.PUBLIC_API_BASE_URL ?? "").trim();
   const baseUrl = configuredBase || `${req.protocol}://${req.get("host")}`;
   return `${baseUrl.replace(/\/$/, "")}/api/auth/reset-password?token=${encodeURIComponent(token)}`;
 }
 
+/**
+ * Validates the password reset user input.
+ */
 function validatePasswordResetUser(user) {
   if (!user) {
     return {
@@ -515,6 +557,9 @@ function validatePasswordResetUser(user) {
   return { valid: true };
 }
 
+/**
+ * Sends the verification response message or response.
+ */
 function sendVerificationResponse(
   req,
   res,
@@ -534,6 +579,9 @@ function sendVerificationResponse(
     .send(renderVerificationPage({ success, title, message }));
 }
 
+/**
+ * Sends the password reset response message or response.
+ */
 function sendPasswordResetResponse(
   req,
   res,
@@ -553,6 +601,9 @@ function sendPasswordResetResponse(
     .send(renderVerificationPage({ success, title, message }));
 }
 
+/**
+ * Supports the prefers html backend flow.
+ */
 function prefersHtml(req) {
   const acceptHeader = String(req.get("accept") ?? "").toLowerCase();
   if (!acceptHeader || acceptHeader.trim() === "*/*") {
@@ -562,6 +613,9 @@ function prefersHtml(req) {
   return preferred === "html";
 }
 
+/**
+ * Supports the render verification page backend flow.
+ */
 function renderVerificationPage({ success, title, message }) {
   const appUrl = String(process.env.PUBLIC_APP_BASE_URL ?? "").trim();
   const escapedTitle = escapeHtml(title);
@@ -662,6 +716,9 @@ function renderVerificationPage({ success, title, message }) {
 </html>`;
 }
 
+/**
+ * Supports the render password reset form page backend flow.
+ */
 function renderPasswordResetFormPage({ token }) {
   const escapedToken = escapeAttribute(token);
   return `<!doctype html>
@@ -752,6 +809,9 @@ function renderPasswordResetFormPage({ token }) {
 </html>`;
 }
 
+/**
+ * Escapes the html value for safe output.
+ */
 function escapeHtml(value) {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -761,6 +821,9 @@ function escapeHtml(value) {
     .replace(/'/g, "&#039;");
 }
 
+/**
+ * Escapes the attribute value for safe output.
+ */
 function escapeAttribute(value) {
   return escapeHtml(value).replace(/`/g, "&#096;");
 }

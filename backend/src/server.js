@@ -21,6 +21,9 @@ app.use(notFoundHandler);
 // Global error handler placed at the bottom, after all routes/middlewares
 app.use(globalErrorHandler);
 
+/**
+ * Starts the HTTP server on the configured port.
+ */
 app.listen(process.env.PORT || env.port, () => {
   console.log(`Smart Travel Planner API running`);
 });

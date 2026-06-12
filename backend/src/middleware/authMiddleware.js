@@ -11,13 +11,13 @@ const { HttpError } = require("../lib/http");
 /**
  * Express middleware that verifies a JWT Bearer token.
  * Attaches the decoded user payload to `req.user` if valid.
- * Throws 401 if the token is missing, malformed, or expired.
+ * Calls next(err) with a 401 HttpError if the token is missing, malformed, or expired.
  */
 function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    throw new HttpError(401, "Access denied. No token provided.");
+    return next(new HttpError(401, "Access denied. No token provided."));
   }
 
   const token = authHeader.split(" ")[1];
@@ -27,10 +27,13 @@ function authMiddleware(req, res, next) {
     req.user = decoded; // { id, email }
     next();
   } catch (err) {
-    if (err.name === "TokenExpiredError") {
-      throw new HttpError(401, "Token has expired. Please log in again.");
+    if (err.statusCode) {
+      return next(err);
     }
-    throw new HttpError(401, "Invalid token.");
+    if (err.name === "TokenExpiredError") {
+      return next(new HttpError(401, "Token has expired. Please log in again."));
+    }
+    return next(new HttpError(401, "Invalid token."));
   }
 }
 

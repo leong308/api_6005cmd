@@ -13,6 +13,9 @@ class HttpError extends Error {
   }
 }
 
+/**
+ * Asserts that the required fields input is valid.
+ */
 function assertRequiredFields(payload, requiredFields) {
   const missing = [];
   for (const field of requiredFields) {
@@ -29,6 +32,9 @@ function assertRequiredFields(payload, requiredFields) {
   }
 }
 
+/**
+ * Asserts that the provided fields not empty input is valid.
+ */
 function assertProvidedFieldsNotEmpty(payload, fields) {
   const empty = [];
   for (const field of fields) {
@@ -45,6 +51,9 @@ function assertProvidedFieldsNotEmpty(payload, fields) {
   }
 }
 
+/**
+ * Checks whether blank value is true.
+ */
 function isBlankValue(value) {
   return (
     value === null ||

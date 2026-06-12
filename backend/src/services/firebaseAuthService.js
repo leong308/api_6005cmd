@@ -7,10 +7,16 @@
  */
 const FIREBASE_AUTH_BASE_URL = "https://identitytoolkit.googleapis.com/v1";
 
+/**
+ * Checks whether firebase auth configured is true.
+ */
 function isFirebaseAuthConfigured() {
   return Boolean(readFirebaseApiKey());
 }
 
+/**
+ * Creates the firebase user data.
+ */
 async function createFirebaseUser({ email, password }) {
   const data = await postFirebase("accounts:signUp", {
     email,
@@ -25,6 +31,9 @@ async function createFirebaseUser({ email, password }) {
   };
 }
 
+/**
+ * Supports the sign in firebase user backend flow.
+ */
 async function signInFirebaseUser({ email, password }) {
   const data = await postFirebase("accounts:signInWithPassword", {
     email,
@@ -39,6 +48,9 @@ async function signInFirebaseUser({ email, password }) {
   };
 }
 
+/**
+ * Supports the lookup firebase user backend flow.
+ */
 async function lookupFirebaseUser(idToken) {
   const data = await postFirebase("accounts:lookup", { idToken });
   const user = Array.isArray(data.users) ? data.users[0] : null;
@@ -53,6 +65,9 @@ async function lookupFirebaseUser(idToken) {
   };
 }
 
+/**
+ * Sends the firebase email verification message or response.
+ */
 async function sendFirebaseEmailVerification(idToken) {
   const data = await postFirebase("accounts:sendOobCode", {
     requestType: "VERIFY_EMAIL",
@@ -67,6 +82,9 @@ async function sendFirebaseEmailVerification(idToken) {
   };
 }
 
+/**
+ * Sends the firebase password reset message or response.
+ */
 async function sendFirebasePasswordReset(email) {
   const data = await postFirebase("accounts:sendOobCode", {
     requestType: "PASSWORD_RESET",
@@ -81,10 +99,16 @@ async function sendFirebasePasswordReset(email) {
   };
 }
 
+/**
+ * Supports the should use firebase auth email backend flow.
+ */
 function shouldUseFirebaseAuthEmail() {
   return String(process.env.EMAIL_PROVIDER ?? "").trim().toLowerCase() === "firebase";
 }
 
+/**
+ * Supports the post firebase backend flow.
+ */
 async function postFirebase(endpoint, body) {
   const apiKey = readFirebaseApiKey();
   if (!apiKey) {
@@ -114,6 +138,9 @@ async function postFirebase(endpoint, body) {
   return parsedBody || {};
 }
 
+/**
+ * Reads the firebase api key value from configuration or input.
+ */
 function readFirebaseApiKey() {
   const value = String(process.env.FIREBASE_AUTH_API_KEY ?? "").trim();
   if (
@@ -126,6 +153,9 @@ function readFirebaseApiKey() {
   return value;
 }
 
+/**
+ * Reads the firebase request timeout ms value from configuration or input.
+ */
 function readFirebaseRequestTimeoutMs() {
   const timeoutMs = Number(
     process.env.FIREBASE_AUTH_REQUEST_TIMEOUT_MS ||
@@ -138,6 +168,9 @@ function readFirebaseRequestTimeoutMs() {
   return timeoutMs;
 }
 
+/**
+ * Parses the json value into the backend format.
+ */
 function parseJson(value) {
   try {
     return JSON.parse(value);

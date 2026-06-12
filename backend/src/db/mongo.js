@@ -15,10 +15,16 @@ let clientPromise = null;
 let dbPromise = null;
 let indexesPromise = null;
 
+/**
+ * Checks whether mongo configured is true.
+ */
 function isMongoConfigured() {
   return readMongoUri().length > 0;
 }
 
+/**
+ * Gets the db data.
+ */
 async function getDb() {
   if (!isMongoConfigured()) {
     throw new Error("MONGO_URI is not configured.");
@@ -31,6 +37,9 @@ async function getDb() {
   return dbPromise;
 }
 
+/**
+ * Connects to the configured backend data store.
+ */
 async function connect() {
   const client = await getClient();
   const db = client.db(readMongoDbName());
@@ -38,6 +47,9 @@ async function connect() {
   return db;
 }
 
+/**
+ * Gets the client data.
+ */
 async function getClient() {
   if (!clientPromise) {
     clientPromise = new MongoClient(readMongoUri(), {
@@ -48,6 +60,9 @@ async function getClient() {
   return clientPromise;
 }
 
+/**
+ * Ensures the indexes input is valid.
+ */
 async function ensureIndexes(db) {
   if (!indexesPromise) {
     indexesPromise = Promise.all([
@@ -69,10 +84,16 @@ async function ensureIndexes(db) {
   await indexesPromise;
 }
 
+/**
+ * Reads the mongo uri value from configuration or input.
+ */
 function readMongoUri() {
   return String(process.env.MONGO_URI ?? "").trim();
 }
 
+/**
+ * Reads the mongo db name value from configuration or input.
+ */
 function readMongoDbName() {
   const configuredName = String(process.env.MONGO_DB_NAME ?? "").trim();
   if (configuredName.length > 0) {
@@ -88,6 +109,9 @@ function readMongoDbName() {
   }
 }
 
+/**
+ * Closes the mongo resource.
+ */
 async function closeMongo() {
   if (!clientPromise) {
     return;

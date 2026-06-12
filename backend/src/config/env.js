@@ -10,6 +10,9 @@ const path = require("path");
 
 const DEFAULT_PORT = 3000;
 
+/**
+ * Supports the load dot env backend flow.
+ */
 function loadDotEnv() {
   const envFile = path.join(__dirname, "..", "..", ".env");
   if (!fs.existsSync(envFile)) {
@@ -44,6 +47,9 @@ function loadDotEnv() {
   }
 }
 
+/**
+ * Parses the port value into the backend format.
+ */
 function parsePort(rawPort) {
   if (!rawPort) {
     return DEFAULT_PORT;
@@ -57,6 +63,9 @@ function parsePort(rawPort) {
   return value;
 }
 
+/**
+ * Parses the origins value into the backend format.
+ */
 function parseOrigins(rawOrigins) {
   if (!rawOrigins || rawOrigins.trim().length === 0) {
     return true;

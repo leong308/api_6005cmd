@@ -12,6 +12,9 @@ const { env } = require("./config/env");
 const { apiRouter } = require("./routes");
 
 
+/**
+ * Creates the app data.
+ */
 function createApp() {
   const app = express();
 
@@ -38,6 +41,9 @@ function createApp() {
   return app;
 }
 
+/**
+ * Resolves the cors origin value.
+ */
 function resolveCorsOrigin(origin, callback) {
   if (!origin || env.corsOrigin === true) {
     return callback(null, true);
@@ -54,6 +60,9 @@ function resolveCorsOrigin(origin, callback) {
   return callback(new Error(`CORS origin is not allowed: ${origin}`), false);
 }
 
+/**
+ * Checks whether local development origin is true.
+ */
 function isLocalDevelopmentOrigin(origin) {
   try {
     const url = new URL(origin);

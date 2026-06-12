@@ -10,6 +10,9 @@ const nodemailer = require("nodemailer");
 
 let transporterPromise = null;
 
+/**
+ * Sends the verification email message or response.
+ */
 async function sendVerificationEmail({ to, name, verificationUrl, expiresAt }) {
   return sendTransactionalEmail({
     to,
@@ -39,6 +42,9 @@ async function sendVerificationEmail({ to, name, verificationUrl, expiresAt }) {
   });
 }
 
+/**
+ * Sends the password reset email message or response.
+ */
 async function sendPasswordResetEmail({ to, name, resetUrl, expiresAt }) {
   return sendTransactionalEmail({
     to,
@@ -69,6 +75,9 @@ async function sendPasswordResetEmail({ to, name, resetUrl, expiresAt }) {
   });
 }
 
+/**
+ * Sends the transactional email message or response.
+ */
 async function sendTransactionalEmail({
   to,
   subject,
@@ -151,6 +160,9 @@ async function sendTransactionalEmail({
   }
 }
 
+/**
+ * Sends the with resend message or response.
+ */
 async function sendWithResend({ to, subject, text, html }) {
   const response = await fetch(readResendApiUrl(), {
     method: "POST",
@@ -180,6 +192,9 @@ async function sendWithResend({ to, subject, text, html }) {
   return parsedBody || {};
 }
 
+/**
+ * Sends the with smtp message or response.
+ */
 async function sendWithSmtp({ to, subject, text, html }) {
   const transporter = await getTransporter();
   await transporter.sendMail({
@@ -191,6 +206,9 @@ async function sendWithSmtp({ to, subject, text, html }) {
   });
 }
 
+/**
+ * Gets the transporter data.
+ */
 async function getTransporter() {
   if (!transporterPromise) {
     transporterPromise = Promise.resolve(
@@ -212,6 +230,9 @@ async function getTransporter() {
   return transporterPromise;
 }
 
+/**
+ * Reads the email provider value from configuration or input.
+ */
 function readEmailProvider() {
   const provider = String(process.env.EMAIL_PROVIDER ?? "auto")
     .trim()
@@ -222,10 +243,16 @@ function readEmailProvider() {
   return "auto";
 }
 
+/**
+ * Checks whether resend configured is true.
+ */
 function isResendConfigured() {
   return Boolean(readResendApiKey());
 }
 
+/**
+ * Reads the resend api key value from configuration or input.
+ */
 function readResendApiKey() {
   return readNonPlaceholderEnv(
     "RESEND_API_KEY",
@@ -234,10 +261,16 @@ function readResendApiKey() {
   );
 }
 
+/**
+ * Reads the resend api url value from configuration or input.
+ */
 function readResendApiUrl() {
   return String(process.env.RESEND_API_URL || "https://api.resend.com/emails").trim();
 }
 
+/**
+ * Checks whether smtp configured is true.
+ */
 function isSmtpConfigured() {
   return Boolean(
     String(process.env.SMTP_HOST ?? "").trim() &&
@@ -246,6 +279,9 @@ function isSmtpConfigured() {
   );
 }
 
+/**
+ * Reads the mail from value from configuration or input.
+ */
 function readMailFrom() {
   return (
     String(process.env.MAIL_FROM ?? "").trim() ||
@@ -254,6 +290,9 @@ function readMailFrom() {
   );
 }
 
+/**
+ * Reads the tls options value from configuration or input.
+ */
 function readTlsOptions() {
   const rejectUnauthorized = String(
     process.env.SMTP_TLS_REJECT_UNAUTHORIZED ?? "true",
@@ -264,6 +303,9 @@ function readTlsOptions() {
   return undefined;
 }
 
+/**
+ * Supports the should use development fallback backend flow.
+ */
 function shouldUseDevelopmentFallback() {
   const fallbackSetting = String(
     process.env.EMAIL_DEV_FALLBACK_ON_ERROR ??
@@ -273,6 +315,9 @@ function shouldUseDevelopmentFallback() {
   return process.env.NODE_ENV !== "production" && fallbackSetting !== "false";
 }
 
+/**
+ * Reads the email request timeout ms value from configuration or input.
+ */
 function readEmailRequestTimeoutMs() {
   const timeoutMs = Number(process.env.EMAIL_REQUEST_TIMEOUT_MS || 10000);
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
@@ -281,6 +326,9 @@ function readEmailRequestTimeoutMs() {
   return timeoutMs;
 }
 
+/**
+ * Reads the non placeholder env value from configuration or input.
+ */
 function readNonPlaceholderEnv(key, ...placeholders) {
   const value = String(process.env[key] ?? "").trim();
   if (!value) {
@@ -295,6 +343,9 @@ function readNonPlaceholderEnv(key, ...placeholders) {
   return value;
 }
 
+/**
+ * Builds the development email result payload.
+ */
 function buildDevelopmentEmailResult({
   fallbackUrl,
   fallbackUrlKey,
@@ -311,6 +362,9 @@ function buildDevelopmentEmailResult({
   };
 }
 
+/**
+ * Parses the json value into the backend format.
+ */
 function parseJson(value) {
   try {
     return JSON.parse(value);
@@ -319,6 +373,9 @@ function parseJson(value) {
   }
 }
 
+/**
+ * Supports the format expiry backend flow.
+ */
 function formatExpiry(expiresAt) {
   const expiresTime = Date.parse(expiresAt ?? "");
   if (!Number.isFinite(expiresTime)) {
@@ -335,6 +392,9 @@ function formatExpiry(expiresAt) {
   return `in ${minutes} minute${minutes === 1 ? "" : "s"}`;
 }
 
+/**
+ * Escapes the html value for safe output.
+ */
 function escapeHtml(value) {
   return String(value)
     .replace(/&/g, "&amp;")

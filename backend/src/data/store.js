@@ -56,10 +56,16 @@ let trips = loadTrips();
 let summaryByTrip = deepClone(seedSummaryByTrip);
 let users = deepClone(seedUsers);
 
+/**
+ * Supports the deep clone backend flow.
+ */
 function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+/**
+ * Supports the load trips backend flow.
+ */
 function loadTrips() {
   try {
     if (!fs.existsSync(tripsFile)) {
@@ -81,6 +87,9 @@ function loadTrips() {
   return deepClone(seedTrips);
 }
 
+/**
+ * Checks whether legacy seed trip is true.
+ */
 function isLegacySeedTrip(trip) {
   return legacySeedTrips.some(
     (seed) =>
@@ -92,15 +101,24 @@ function isLegacySeedTrip(trip) {
   );
 }
 
+/**
+ * Supports the persist trips backend flow.
+ */
 function persistTrips() {
   writeTrips(trips);
 }
 
+/**
+ * Supports the write trips backend flow.
+ */
 function writeTrips(nextTrips) {
   fs.mkdirSync(runtimeDataDir, { recursive: true });
   fs.writeFileSync(tripsFile, JSON.stringify(nextTrips, null, 2));
 }
 
+/**
+ * Generates the trip id value.
+ */
 function generateTripId() {
   const maxNumber = trips.reduce((max, trip) => {
     const value = Number(trip.id.replace("trip_", ""));
@@ -112,15 +130,24 @@ function generateTripId() {
   return `trip_${String(maxNumber + 1).padStart(3, "0")}`;
 }
 
+/**
+ * Lists the trips data.
+ */
 function listTrips() {
   return deepClone(trips);
 }
 
+/**
+ * Gets the trip by id data.
+ */
 function getTripById(id) {
   const trip = trips.find((item) => item.id === id);
   return trip ? deepClone(trip) : null;
 }
 
+/**
+ * Creates the trip data.
+ */
 function createTrip(payload) {
   const created = {
     id: generateTripId(),
@@ -143,6 +170,9 @@ function createTrip(payload) {
   return deepClone(created);
 }
 
+/**
+ * Updates the trip data.
+ */
 function updateTrip(id, payload) {
   const index = trips.findIndex((item) => item.id === id);
   if (index < 0) {
@@ -186,6 +216,9 @@ function updateTrip(id, payload) {
   return deepClone(updated);
 }
 
+/**
+ * Deletes the trip data.
+ */
 function deleteTrip(id) {
   const before = trips.length;
   trips = trips.filter((item) => item.id !== id);
@@ -197,26 +230,41 @@ function deleteTrip(id) {
   return deleted;
 }
 
+/**
+ * Gets the trip weather data.
+ */
 function getTripWeather(id) {
   const summary = getTripSummarySeed(id);
   return deepClone(summary.weather);
 }
 
+/**
+ * Gets the trip google places data.
+ */
 function getTripGooglePlaces(id) {
   const summary = getTripSummarySeed(id);
   return deepClone(summary.googlePlaces);
 }
 
+/**
+ * Gets the trip recommendations data.
+ */
 function getTripRecommendations(id) {
   const summary = getTripSummarySeed(id);
   return deepClone(summary.recommendations);
 }
 
+/**
+ * Gets the trip country info data.
+ */
 function getTripCountryInfo(id) {
   const summary = getTripSummarySeed(id);
   return deepClone(summary.countryInfo);
 }
 
+/**
+ * Gets the trip summary data.
+ */
 function getTripSummary(id) {
   const trip = getTripById(id);
   if (!trip) {
@@ -233,6 +281,9 @@ function getTripSummary(id) {
   };
 }
 
+/**
+ * Gets the trip summary seed data.
+ */
 function getTripSummarySeed(id) {
   if (!summaryByTrip[id]) {
     const trip = getTripById(id);
@@ -241,6 +292,9 @@ function getTripSummarySeed(id) {
   return summaryByTrip[id];
 }
 
+/**
+ * Builds the fallback summary payload.
+ */
 function buildFallbackSummary(trip) {
   if (!trip) {
     return {
@@ -283,14 +337,23 @@ function buildFallbackSummary(trip) {
   };
 }
 
+/**
+ * Gets the user by email data.
+ */
 function getUserByEmail(email) {
   return users.find((user) => user.email.toLowerCase() === email.toLowerCase()) ?? null;
 }
 
+/**
+ * Gets the user by id data.
+ */
 function getUserById(userId) {
   return users.find((user) => user.id === userId) ?? null;
 }
 
+/**
+ * Gets the user by verification token hash data.
+ */
 function getUserByVerificationTokenHash(tokenHash) {
   return (
     users.find(
@@ -299,6 +362,9 @@ function getUserByVerificationTokenHash(tokenHash) {
   );
 }
 
+/**
+ * Gets the user by password reset token hash data.
+ */
 function getUserByPasswordResetTokenHash(tokenHash) {
   return (
     users.find((user) => user.passwordResetTokenHash === String(tokenHash)) ??
@@ -306,6 +372,9 @@ function getUserByPasswordResetTokenHash(tokenHash) {
   );
 }
 
+/**
+ * Supports the mark user email verified backend flow.
+ */
 function markUserEmailVerified(userId) {
   const user = users.find((item) => item.id === userId);
   if (!user) {
@@ -326,6 +395,9 @@ function markUserEmailVerified(userId) {
   };
 }
 
+/**
+ * Sets the user email verification data.
+ */
 function setUserEmailVerification(userId, verification) {
   const user = users.find((item) => item.id === userId);
   if (!user) {
@@ -337,6 +409,9 @@ function setUserEmailVerification(userId, verification) {
   return user;
 }
 
+/**
+ * Sets the user password reset data.
+ */
 function setUserPasswordReset(userId, reset) {
   const user = users.find((item) => item.id === userId);
   if (!user) {
@@ -348,6 +423,9 @@ function setUserPasswordReset(userId, reset) {
   return user;
 }
 
+/**
+ * Updates the user password data.
+ */
 function updateUserPassword(userId, hashedPassword) {
   const user = users.find((item) => item.id === userId);
   if (!user) {
@@ -360,6 +438,9 @@ function updateUserPassword(userId, hashedPassword) {
   return user;
 }
 
+/**
+ * Supports the mark user app tour completed backend flow.
+ */
 function markUserAppTourCompleted(userId) {
   const user = users.find((item) => item.id === userId);
   if (!user) {
@@ -370,6 +451,9 @@ function markUserAppTourCompleted(userId) {
   return user;
 }
 
+/**
+ * Creates the user data.
+ */
 function createUser(payload) {
   const now = new Date().toISOString();
   const created = {
@@ -398,6 +482,9 @@ function createUser(payload) {
   };
 }
 
+/**
+ * Deletes the expired unverified users data.
+ */
 function deleteExpiredUnverifiedUsers(referenceDate = new Date()) {
   const referenceTime = referenceDate.getTime();
   const expiredUserIds = users
@@ -418,6 +505,9 @@ function deleteExpiredUnverifiedUsers(referenceDate = new Date()) {
   return expiredUserIds.length;
 }
 
+/**
+ * Checks whether expired unverified user is true.
+ */
 function isExpiredUnverifiedUser(user, referenceTime) {
   if (user.emailVerified) {
     return false;

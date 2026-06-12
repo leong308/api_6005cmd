@@ -55,11 +55,17 @@ async function getTripSummary(req, res, next) {
   }
 }
 
+/**
+ * Parses the recommendation limit value into the backend format.
+ */
 function parseRecommendationLimit(value) {
   const parsed = Number(value);
   return [3, 5, 10].includes(parsed) ? parsed : 5;
 }
 
+/**
+ * Parses the recommendation limits value into the backend format.
+ */
 function parseRecommendationLimits(value) {
   if (Array.isArray(value)) {
     return value.reduce(
@@ -83,6 +89,9 @@ function parseRecommendationLimits(value) {
     }, {});
 }
 
+/**
+ * Parses the route map days value into the backend format.
+ */
 function parseRouteMapDays(value) {
   const parsed = Number(value);
   if (!Number.isInteger(parsed)) {
@@ -91,6 +100,9 @@ function parseRouteMapDays(value) {
   return Math.min(Math.max(parsed, 0), 21);
 }
 
+/**
+ * Parses the route map day indexes value into the backend format.
+ */
 function parseRouteMapDayIndexes(value) {
   if (Array.isArray(value)) {
     return value.flatMap(parseRouteMapDayIndexes);
@@ -102,6 +114,9 @@ function parseRouteMapDayIndexes(value) {
     .filter((item) => Number.isInteger(item) && item >= 0 && item < 21);
 }
 
+/**
+ * Parses the availability days value into the backend format.
+ */
 function parseAvailabilityDays(value) {
   const parsed = Number(value);
   if (!Number.isInteger(parsed)) {
@@ -110,6 +125,9 @@ function parseAvailabilityDays(value) {
   return Math.min(Math.max(parsed, 0), 7);
 }
 
+/**
+ * Parses the boolean query value into the backend format.
+ */
 function parseBooleanQuery(value) {
   return ["1", "true", "yes", "force"].includes(
     String(value ?? "").trim().toLowerCase(),

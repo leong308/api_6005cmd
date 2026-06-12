@@ -12,6 +12,9 @@ const CACHE_DIR =
   process.env.TRIP_WEATHER_CACHE_DIR ||
   path.join(__dirname, "..", "..", ".data", "weather-cache");
 
+/**
+ * Gets the weather cache entry data.
+ */
 async function getWeatherCacheEntry(trip, entryName, cacheKey) {
   const file = await readTripCacheFile(trip.id);
   const entry = file.entries?.[entryName];
@@ -32,6 +35,9 @@ async function getWeatherCacheEntry(trip, entryName, cacheKey) {
   };
 }
 
+/**
+ * Gets the stale weather cache entry data.
+ */
 async function getStaleWeatherCacheEntry(
   trip,
   entryName,
@@ -57,6 +63,9 @@ async function getStaleWeatherCacheEntry(
   };
 }
 
+/**
+ * Deletes the weather cache entry data.
+ */
 async function deleteWeatherCacheEntry(tripId, entryName, cacheKey) {
   const file = await readTripCacheFile(tripId);
   const entry = file.entries?.[entryName];
@@ -79,6 +88,9 @@ async function deleteWeatherCacheEntry(tripId, entryName, cacheKey) {
   });
 }
 
+/**
+ * Sets the weather cache entry data.
+ */
 async function setWeatherCacheEntry({
   trip,
   entryName,
@@ -112,6 +124,9 @@ async function setWeatherCacheEntry({
   await writeTripCacheFile(trip.id, nextFile);
 }
 
+/**
+ * Deletes the trip weather cache data.
+ */
 async function deleteTripWeatherCache(tripId) {
   try {
     await fs.unlink(cachePath(tripId));
@@ -122,6 +137,9 @@ async function deleteTripWeatherCache(tripId) {
   }
 }
 
+/**
+ * Reads the trip cache file value from configuration or input.
+ */
 async function readTripCacheFile(tripId) {
   try {
     const raw = await fs.readFile(cachePath(tripId), "utf8");
@@ -136,19 +154,31 @@ async function readTripCacheFile(tripId) {
   }
 }
 
+/**
+ * Supports the write trip cache file backend flow.
+ */
 async function writeTripCacheFile(tripId, value) {
   await fs.mkdir(CACHE_DIR, { recursive: true });
   await fs.writeFile(cachePath(tripId), JSON.stringify(value, null, 2));
 }
 
+/**
+ * Supports the cache path backend flow.
+ */
 function cachePath(tripId) {
   return path.join(CACHE_DIR, `${safeFileName(tripId)}.json`);
 }
 
+/**
+ * Supports the safe file name backend flow.
+ */
 function safeFileName(value) {
   return String(value).replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
+/**
+ * Checks whether older than is true.
+ */
 function isOlderThan(cachedAt, maxAgeMs) {
   if (!Number.isFinite(maxAgeMs) || maxAgeMs <= 0) {
     return false;

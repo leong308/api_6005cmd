@@ -26,7 +26,7 @@ const NEGATIVE_CACHE_TTL_MS = Number(
 const cache = new Map();
 
 /**
- * Builds the cache key for a Foursquare or fallback recommendation lookup.
+ * Supports the cache key backend flow.
  */
 function cacheKey(latitude, longitude, preference, limit, openAt) {
   return [
@@ -39,7 +39,7 @@ function cacheKey(latitude, longitude, preference, limit, openAt) {
 }
 
 /**
- * Reads the Foursquare API key from environment variables.
+ * Reads the api key value from configuration or input.
  */
 function readApiKey() {
   const apiKey = process.env.FOURSQUARE_API_KEY;
@@ -53,7 +53,7 @@ function readApiKey() {
 }
 
 /**
- * Validates coordinates before any external lookup starts.
+ * Validates the coordinates input.
  */
 function validateCoordinates(latitude, longitude) {
   if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
@@ -178,7 +178,7 @@ async function fetchRecommendations({
 }
 
 /**
- * Fetches grouped recommendations for all selected trip preferences.
+ * Fetches the recommendation groups data.
  */
 async function fetchRecommendationGroups({
   latitude,
@@ -262,7 +262,7 @@ async function requestFoursquare({
 }
 
 /**
- * Builds the Authorization header using either Bearer or raw API key mode.
+ * Supports the auth header value backend flow.
  */
 function authHeaderValue(apiKey, authMode) {
   if (/^Bearer\s+/i.test(apiKey)) {
@@ -275,7 +275,7 @@ function authHeaderValue(apiKey, authMode) {
 }
 
 /**
- * Extracts the best readable error from a failed Foursquare response.
+ * Extracts the error message value from a provider response.
  */
 function extractErrorMessage(body, status) {
   if (typeof body.message === "string" && body.message.trim().length > 0) {
@@ -294,7 +294,7 @@ function extractErrorMessage(body, status) {
 }
 
 /**
- * Maps one Foursquare place into the app recommendation model.
+ * Maps the place to recommendation data into the API shape.
  */
 function mapPlaceToRecommendation(place, { openAt = "" } = {}) {
   const category = Array.isArray(place.categories)
@@ -331,7 +331,7 @@ function mapPlaceToRecommendation(place, { openAt = "" } = {}) {
 }
 
 /**
- * Builds a readable address from Foursquare location fields.
+ * Supports the address label backend flow.
  */
 function addressLabel(location) {
   if (Array.isArray(location.formatted_address)) {
@@ -352,7 +352,7 @@ function addressLabel(location) {
 }
 
 /**
- * Normalizes one preference string.
+ * Normalizes the preference value.
  */
 function normalizePreference(value) {
   const text = String(value ?? "").trim().toLowerCase();
@@ -360,7 +360,7 @@ function normalizePreference(value) {
 }
 
 /**
- * Normalizes Foursquare `open_at` values used for timed agenda slots.
+ * Normalizes the open at value.
  */
 function normalizeOpenAt(value) {
   const text = String(value ?? "").trim().toUpperCase();
@@ -368,7 +368,7 @@ function normalizeOpenAt(value) {
 }
 
 /**
- * Normalizes and de-duplicates trip preferences.
+ * Normalizes the preferences value.
  */
 function normalizePreferences(values) {
   const source = Array.isArray(values) ? values : [values];
@@ -392,7 +392,7 @@ function limitForPreference(preference, limitsByPreference, fallbackLimit) {
 }
 
 /**
- * Maps app preference labels into stronger Foursquare search text.
+ * Supports the query for preference backend flow.
  */
 function queryForPreference(preference) {
   const queries = {
@@ -422,6 +422,9 @@ function clampLimit(value) {
   return Math.min(Math.max(parsed, 1), 10);
 }
 
+/**
+ * Supports the remember recommendations backend flow.
+ */
 async function rememberRecommendations(key, data) {
   cache.set(key, {
     data,

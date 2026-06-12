@@ -9,6 +9,9 @@ const { getDb, isMongoConfigured } = require("../db/mongo");
 
 const COLLECTION = "api_cache";
 
+/**
+ * Gets the cached value data.
+ */
 async function getCachedValue(namespace, key) {
   if (!isMongoConfigured()) {
     return undefined;
@@ -28,6 +31,9 @@ async function getCachedValue(namespace, key) {
   return doc.value;
 }
 
+/**
+ * Sets the cached value data.
+ */
 async function setCachedValue(namespace, key, value, options = {}) {
   if (!isMongoConfigured()) {
     return;
@@ -67,6 +73,9 @@ async function setCachedValue(namespace, key, value, options = {}) {
   );
 }
 
+/**
+ * Deletes the cached value data.
+ */
 async function deleteCachedValue(namespace, key) {
   if (!isMongoConfigured()) {
     return;
@@ -75,6 +84,9 @@ async function deleteCachedValue(namespace, key) {
   await (await getCollection()).deleteOne({ namespace, key });
 }
 
+/**
+ * Deletes the cached values by prefix data.
+ */
 async function deleteCachedValuesByPrefix(namespace, keyPrefix) {
   if (!isMongoConfigured()) {
     return;
@@ -86,11 +98,17 @@ async function deleteCachedValuesByPrefix(namespace, keyPrefix) {
   });
 }
 
+/**
+ * Gets the collection data.
+ */
 async function getCollection() {
   const db = await getDb();
   return db.collection(COLLECTION);
 }
 
+/**
+ * Escapes the reg exp value for safe output.
+ */
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

@@ -17,10 +17,16 @@ const MIN_REQUEST_INTERVAL_MS = 1100;
 const cache = new Map();
 let nextRequestAt = 0;
 
+/**
+ * Supports the cache key backend flow.
+ */
 function cacheKey(latitude, longitude) {
   return `${latitude.toFixed(5)},${longitude.toFixed(5)}`;
 }
 
+/**
+ * Supports the wait for rate limit backend flow.
+ */
 async function waitForRateLimit() {
   const delay = nextRequestAt - Date.now();
   if (delay > 0) {
@@ -29,6 +35,9 @@ async function waitForRateLimit() {
   nextRequestAt = Date.now() + MIN_REQUEST_INTERVAL_MS;
 }
 
+/**
+ * Supports the reverse geocode backend flow.
+ */
 async function reverseGeocode(latitude, longitude) {
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
     throw new HttpError(400, "Latitude and longitude must be valid numbers.");
@@ -84,6 +93,9 @@ async function reverseGeocode(latitude, longitude) {
   }
 }
 
+/**
+ * Supports the reverse geocode with nominatim backend flow.
+ */
 async function reverseGeocodeWithNominatim(latitude, longitude) {
   await waitForRateLimit();
 
@@ -126,6 +138,9 @@ async function reverseGeocodeWithNominatim(latitude, longitude) {
   });
 }
 
+/**
+ * Supports the english country name backend flow.
+ */
 async function englishCountryName(countryCode, fallback) {
   if (!countryCode) {
     return fallback ?? "";
@@ -141,6 +156,9 @@ async function englishCountryName(countryCode, fallback) {
   }
 }
 
+/**
+ * Normalizes the result value.
+ */
 function normalizeResult(result) {
   return {
     country: String(result.country ?? "").trim(),

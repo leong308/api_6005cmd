@@ -11,6 +11,9 @@ const { getDb, isMongoConfigured } = require("../db/mongo");
 const TRIPS_COLLECTION = "trips";
 const USERS_COLLECTION = "users";
 
+/**
+ * Lists the trips data.
+ */
 async function listTrips(ownerUserId = null) {
   if (!isMongoConfigured()) {
     return localStore
@@ -25,6 +28,9 @@ async function listTrips(ownerUserId = null) {
   return trips.map(toPublicTrip);
 }
 
+/**
+ * Gets the trip by id data.
+ */
 async function getTripById(id, ownerUserId = null) {
   if (!isMongoConfigured()) {
     const trip = localStore.getTripById(id);
@@ -42,6 +48,9 @@ async function getTripById(id, ownerUserId = null) {
   return trip ? toPublicTrip(trip) : null;
 }
 
+/**
+ * Creates the trip data.
+ */
 async function createTrip(payload, ownerUserId = null) {
   if (!isMongoConfigured()) {
     return localStore.createTrip({ ...payload, ownerUserId });
@@ -61,6 +70,9 @@ async function createTrip(payload, ownerUserId = null) {
   return toPublicTrip(created);
 }
 
+/**
+ * Updates the trip data.
+ */
 async function updateTrip(id, payload, ownerUserId = null) {
   if (!isMongoConfigured()) {
     const current = localStore.getTripById(id);
@@ -93,6 +105,9 @@ async function updateTrip(id, payload, ownerUserId = null) {
   return updated ? toPublicTrip(updated) : null;
 }
 
+/**
+ * Deletes the trip data.
+ */
 async function deleteTrip(id, ownerUserId = null) {
   if (!isMongoConfigured()) {
     const current = localStore.getTripById(id);
@@ -112,22 +127,37 @@ async function deleteTrip(id, ownerUserId = null) {
   return false;
 }
 
+/**
+ * Gets the trip google places data.
+ */
 async function getTripGooglePlaces(_id) {
   return [];
 }
 
+/**
+ * Gets the trip weather data.
+ */
 async function getTripWeather(id) {
   return localStore.getTripWeather(id);
 }
 
+/**
+ * Gets the trip recommendations data.
+ */
 async function getTripRecommendations(id) {
   return localStore.getTripRecommendations(id);
 }
 
+/**
+ * Gets the trip country info data.
+ */
 async function getTripCountryInfo(id) {
   return localStore.getTripCountryInfo(id);
 }
 
+/**
+ * Gets the trip summary data.
+ */
 async function getTripSummary(id, ownerUserId = null) {
   const trip = await getTripById(id, ownerUserId);
   if (!trip) {
@@ -143,6 +173,9 @@ async function getTripSummary(id, ownerUserId = null) {
   };
 }
 
+/**
+ * Gets the user by email data.
+ */
 async function getUserByEmail(email) {
   if (!isMongoConfigured()) {
     return localStore.getUserByEmail(email);
@@ -154,6 +187,9 @@ async function getUserByEmail(email) {
   return user ? toUser(user, { includePassword: true }) : null;
 }
 
+/**
+ * Gets the user by id data.
+ */
 async function getUserById(userId) {
   if (!isMongoConfigured()) {
     return localStore.getUserById(userId);
@@ -163,6 +199,9 @@ async function getUserById(userId) {
   return user ? toUser(user, { includePassword: true }) : null;
 }
 
+/**
+ * Creates the user data.
+ */
 async function createUser(payload) {
   if (!isMongoConfigured()) {
     return localStore.createUser(payload);
@@ -193,6 +232,9 @@ async function createUser(payload) {
   return toUser(created);
 }
 
+/**
+ * Gets the user by verification token hash data.
+ */
 async function getUserByVerificationTokenHash(tokenHash) {
   if (!isMongoConfigured()) {
     const user = localStore.getUserByVerificationTokenHash(tokenHash);
@@ -205,6 +247,9 @@ async function getUserByVerificationTokenHash(tokenHash) {
   return user ? toUser(user, { includePassword: true, includeVerification: true }) : null;
 }
 
+/**
+ * Gets the user by password reset token hash data.
+ */
 async function getUserByPasswordResetTokenHash(tokenHash) {
   if (!isMongoConfigured()) {
     const user = localStore.getUserByPasswordResetTokenHash(tokenHash);
@@ -217,6 +262,9 @@ async function getUserByPasswordResetTokenHash(tokenHash) {
   return user ? toUser(user, { includePassword: true, includeReset: true }) : null;
 }
 
+/**
+ * Supports the mark user email verified backend flow.
+ */
 async function markUserEmailVerified(userId) {
   if (!isMongoConfigured()) {
     const user = localStore.markUserEmailVerified(userId);
@@ -243,6 +291,9 @@ async function markUserEmailVerified(userId) {
   return user ? toUser(user) : null;
 }
 
+/**
+ * Sets the user email verification data.
+ */
 async function setUserEmailVerification(userId, verification) {
   if (!isMongoConfigured()) {
     const user = localStore.setUserEmailVerification(userId, verification);
@@ -268,6 +319,9 @@ async function setUserEmailVerification(userId, verification) {
     : null;
 }
 
+/**
+ * Sets the user password reset data.
+ */
 async function setUserPasswordReset(userId, reset) {
   if (!isMongoConfigured()) {
     const user = localStore.setUserPasswordReset(userId, reset);
@@ -289,6 +343,9 @@ async function setUserPasswordReset(userId, reset) {
   return user ? toUser(user, { includePassword: true, includeReset: true }) : null;
 }
 
+/**
+ * Updates the user password data.
+ */
 async function updateUserPassword(userId, hashedPassword) {
   if (!isMongoConfigured()) {
     const user = localStore.updateUserPassword(userId, hashedPassword);
@@ -313,6 +370,9 @@ async function updateUserPassword(userId, hashedPassword) {
   return user ? toUser(user) : null;
 }
 
+/**
+ * Supports the mark user app tour completed backend flow.
+ */
 async function markUserAppTourCompleted(userId) {
   if (!isMongoConfigured()) {
     const user = localStore.markUserAppTourCompleted(userId);
@@ -333,6 +393,9 @@ async function markUserAppTourCompleted(userId) {
   return user ? toUser(user) : null;
 }
 
+/**
+ * Deletes the expired unverified users data.
+ */
 async function deleteExpiredUnverifiedUsers(referenceDate = new Date()) {
   if (!isMongoConfigured()) {
     return localStore.deleteExpiredUnverifiedUsers(referenceDate);
@@ -365,14 +428,23 @@ async function deleteExpiredUnverifiedUsers(referenceDate = new Date()) {
   return result.deletedCount ?? 0;
 }
 
+/**
+ * Supports the trips collection backend flow.
+ */
 async function tripsCollection() {
   return (await getDb()).collection(TRIPS_COLLECTION);
 }
 
+/**
+ * Supports the users collection backend flow.
+ */
 async function usersCollection() {
   return (await getDb()).collection(USERS_COLLECTION);
 }
 
+/**
+ * Generates the trip id value.
+ */
 async function generateTripId(collection) {
   const trips = await collection
     .find({ id: /^trip_\d+$/ }, { projection: { id: 1 } })
@@ -384,6 +456,9 @@ async function generateTripId(collection) {
   return `trip_${String(maxNumber + 1).padStart(3, "0")}`;
 }
 
+/**
+ * Generates the user id value.
+ */
 async function generateUserId(collection) {
   const users = await collection
     .find({ id: /^user_\d+$/ }, { projection: { id: 1 } })
@@ -395,6 +470,9 @@ async function generateUserId(collection) {
   return `user_${String(maxNumber + 1).padStart(3, "0")}`;
 }
 
+/**
+ * Normalizes the trip payload value.
+ */
 function normalizeTripPayload(payload, current = {}) {
   return {
     destinationName:
@@ -426,6 +504,9 @@ function normalizeTripPayload(payload, current = {}) {
   };
 }
 
+/**
+ * Normalizes the preference list value.
+ */
 function normalizePreferenceList(value) {
   if (!Array.isArray(value)) {
     return [];
@@ -433,6 +514,9 @@ function normalizePreferenceList(value) {
   return value.map((item) => String(item));
 }
 
+/**
+ * Supports the to public trip backend flow.
+ */
 function toPublicTrip(trip) {
   return stripMongoId({
     id: trip.id,
@@ -450,6 +534,9 @@ function toPublicTrip(trip) {
   });
 }
 
+/**
+ * Supports the to user backend flow.
+ */
 function toUser(
   user,
   {
@@ -485,15 +572,24 @@ function toUser(
   return publicUser;
 }
 
+/**
+ * Supports the strip mongo id backend flow.
+ */
 function stripMongoId(value) {
   const { _id, ...publicValue } = value;
   return publicValue;
 }
 
+/**
+ * Normalizes the email value.
+ */
 function normalizeEmail(email) {
   return String(email ?? "").trim().toLowerCase();
 }
 
+/**
+ * Supports the invalidate trip caches backend flow.
+ */
 async function invalidateTripCaches(id) {
   await Promise.all([
     cacheRepository.deleteCachedValuesByPrefix("trip_summary", `${id}:`),
@@ -504,6 +600,9 @@ async function invalidateTripCaches(id) {
   ]);
 }
 
+/**
+ * Supports the trip owner query backend flow.
+ */
 function tripOwnerQuery(id, ownerUserId) {
   const query = { id: String(id) };
   if (ownerUserId) {

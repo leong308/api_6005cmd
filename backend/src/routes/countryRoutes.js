@@ -9,6 +9,9 @@ const { getCountryInfo } = require("../controllers/countryController");
 
 const countryRouter = express.Router();
 
+/**
+ * Handles GET /:name requests for the country API.
+ */
 countryRouter.get("/:name", getCountryInfo);
 
 module.exports = {

@@ -15,6 +15,9 @@ const weatherService = require("../services/weatherService");
 
 const externalRouter = express.Router();
 
+/**
+ * Ensures the coordinates input is valid.
+ */
 function ensureCoordinates(req) {
   const latitude = Number(req.query.lat);
   const longitude = Number(req.query.lng);
@@ -26,6 +29,9 @@ function ensureCoordinates(req) {
   return { latitude, longitude };
 }
 
+/**
+ * Ensures the date range input is valid.
+ */
 function ensureDateRange(req) {
   const startDate = String(req.query.startDate ?? req.query.start_date ?? "").trim();
   const endDate = String(req.query.endDate ?? req.query.end_date ?? "").trim();
@@ -40,6 +46,9 @@ function ensureDateRange(req) {
   return { startDate, endDate };
 }
 
+/**
+ * Ensures the route coordinates input is valid.
+ */
 function ensureRouteCoordinates(req) {
   const fromLatitude = Number(req.query.fromLat);
   const fromLongitude = Number(req.query.fromLng);
@@ -66,6 +75,9 @@ function ensureRouteCoordinates(req) {
   };
 }
 
+/**
+ * Handles GET /weather requests for the external API.
+ */
 externalRouter.get("/weather", async (req, res, next) => {
   try {
     const { latitude, longitude } = ensureCoordinates(req);
@@ -85,6 +97,9 @@ externalRouter.get("/weather", async (req, res, next) => {
   }
 });
 
+/**
+ * Handles GET /weather/forecast requests for the external API.
+ */
 externalRouter.get("/weather/forecast", async (req, res, next) => {
   try {
     const { latitude, longitude } = ensureCoordinates(req);
@@ -111,6 +126,9 @@ externalRouter.get("/weather/forecast", async (req, res, next) => {
   }
 });
 
+/**
+ * Supports the handle route request backend flow.
+ */
 async function handleRouteRequest(req, res, next) {
   try {
     const coordinates = ensureRouteCoordinates(req);
@@ -129,9 +147,18 @@ async function handleRouteRequest(req, res, next) {
   }
 }
 
+/**
+ * Handles GET /route requests for the external API.
+ */
 externalRouter.get("/route", handleRouteRequest);
+/**
+ * Handles GET /walking-route requests for the external API.
+ */
 externalRouter.get("/walking-route", handleRouteRequest);
 
+/**
+ * Handles GET /google-places requests for the external API.
+ */
 externalRouter.get("/google-places", (req, res) => {
   const { latitude, longitude } = ensureCoordinates(req);
   const preference = String(req.query.preference ?? "culture");
@@ -156,6 +183,9 @@ externalRouter.get("/google-places", (req, res) => {
   });
 });
 
+/**
+ * Handles GET /recommendations requests for the external API.
+ */
 externalRouter.get("/recommendations", async (req, res, next) => {
   try {
     const { latitude, longitude } = ensureCoordinates(req);
@@ -195,6 +225,9 @@ externalRouter.get("/recommendations", async (req, res, next) => {
   }
 });
 
+/**
+ * Parses the preference list value into the backend format.
+ */
 function parsePreferenceList(value) {
   if (Array.isArray(value)) {
     return value.flatMap(parsePreferenceList);
@@ -205,17 +238,26 @@ function parsePreferenceList(value) {
     .filter((preference) => preference.length > 0);
 }
 
+/**
+ * Parses the recommendation limit value into the backend format.
+ */
 function parseRecommendationLimit(value) {
   const parsed = Number(value);
   return [3, 5, 10].includes(parsed) ? parsed : 5;
 }
 
+/**
+ * Parses the boolean query value into the backend format.
+ */
 function parseBooleanQuery(value) {
   return ["1", "true", "yes", "force"].includes(
     String(value ?? "").trim().toLowerCase(),
   );
 }
 
+/**
+ * Parses the recommendation limits value into the backend format.
+ */
 function parseRecommendationLimits(value) {
   if (Array.isArray(value)) {
     return value.reduce(
@@ -241,6 +283,9 @@ function parseRecommendationLimits(value) {
     }, {});
 }
 
+/**
+ * Handles GET /country-info requests for the external API.
+ */
 externalRouter.get("/country-info", async (req, res, next) => {
   try {
     const country = String(req.query.country ?? "").trim();
@@ -260,6 +305,9 @@ externalRouter.get("/country-info", async (req, res, next) => {
   }
 });
 
+/**
+ * Handles GET /reverse-geocode requests for the external API.
+ */
 externalRouter.get("/reverse-geocode", async (req, res, next) => {
   try {
     const { latitude, longitude } = ensureCoordinates(req);

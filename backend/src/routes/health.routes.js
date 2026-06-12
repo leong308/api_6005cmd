@@ -8,6 +8,9 @@ const express = require("express");
 
 const healthRouter = express.Router();
 
+/**
+ * Handles GET / requests for the health API.
+ */
 healthRouter.get("/", (req, res) => {
   res.json({
     success: true,

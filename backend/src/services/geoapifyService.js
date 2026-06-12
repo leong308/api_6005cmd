@@ -27,6 +27,9 @@ const COUNTRY_CACHE_PRECISION = readCountryCachePrecision();
 const cache = new Map();
 const countryCache = new Map();
 
+/**
+ * Fetches the country by coordinates data.
+ */
 async function fetchCountryByCoordinates(latitude, longitude) {
   validateCoordinates(latitude, longitude);
 
@@ -190,6 +193,9 @@ function buildPlacesUrl({ latitude, longitude, preference, limit }) {
   return url;
 }
 
+/**
+ * Builds the reverse geocode url payload.
+ */
 function buildReverseGeocodeUrl({ latitude, longitude }) {
   const url = new URL(GEOAPIFY_REVERSE_GEOCODING_URL);
   url.searchParams.set("lat", latitude);
@@ -201,6 +207,9 @@ function buildReverseGeocodeUrl({ latitude, longitude }) {
   return url;
 }
 
+/**
+ * Maps the reverse geocode country data into the API shape.
+ */
 function mapReverseGeocodeCountry(body, { latitude, longitude }) {
   const result = firstReverseGeocodeResult(body);
   const country = String(
@@ -232,6 +241,9 @@ function mapReverseGeocodeCountry(body, { latitude, longitude }) {
   };
 }
 
+/**
+ * Supports the first reverse geocode result backend flow.
+ */
 function firstReverseGeocodeResult(body) {
   if (Array.isArray(body.results) && body.results.length > 0) {
     return body.results[0] ?? {};
@@ -243,7 +255,7 @@ function firstReverseGeocodeResult(body) {
 }
 
 /**
- * Converts one Geoapify GeoJSON feature into the app recommendation model.
+ * Maps the feature to recommendation data into the API shape.
  */
 function mapFeatureToRecommendation(feature, { preference, openAt }) {
   const properties = feature.properties ?? {};
@@ -304,7 +316,7 @@ function featureCoordinates(feature) {
 }
 
 /**
- * Maps app preference names to Geoapify Places categories.
+ * Supports the categories for preference backend flow.
  */
 function categoriesForPreference(preference) {
   const categories = {
@@ -349,7 +361,7 @@ function readApiKey() {
 }
 
 /**
- * Builds a stable cache key for repeated Geoapify lookups.
+ * Supports the cache key backend flow.
  */
 function cacheKey(latitude, longitude, preference, limit, openAt) {
   return [
@@ -361,6 +373,9 @@ function cacheKey(latitude, longitude, preference, limit, openAt) {
   ].join(",");
 }
 
+/**
+ * Supports the country cache key backend flow.
+ */
 function countryCacheKey(latitude, longitude) {
   return [
     Number(latitude).toFixed(COUNTRY_CACHE_PRECISION),
@@ -369,6 +384,9 @@ function countryCacheKey(latitude, longitude) {
   ].join(",");
 }
 
+/**
+ * Reads the country cache precision value from configuration or input.
+ */
 function readCountryCachePrecision() {
   const precision = Number(process.env.GEOAPIFY_COUNTRY_CACHE_PRECISION || 3);
   if (!Number.isInteger(precision)) {
@@ -378,7 +396,7 @@ function readCountryCachePrecision() {
 }
 
 /**
- * Validates latitude and longitude before provider calls.
+ * Validates the coordinates input.
  */
 function validateCoordinates(latitude, longitude) {
   if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
@@ -393,7 +411,7 @@ function validateCoordinates(latitude, longitude) {
 }
 
 /**
- * Normalizes one preference string for category mapping.
+ * Normalizes the preference value.
  */
 function normalizePreference(value) {
   const text = String(value ?? "").trim().toLowerCase();
@@ -401,7 +419,7 @@ function normalizePreference(value) {
 }
 
 /**
- * Normalizes and de-duplicates preference lists.
+ * Normalizes the preferences value.
  */
 function normalizePreferences(values) {
   const source = Array.isArray(values) ? values : [values];
@@ -466,7 +484,7 @@ function titleForPreference(preference) {
 }
 
 /**
- * Extracts the most useful message from a failed Geoapify response.
+ * Extracts the geoapify error value from a provider response.
  */
 function extractGeoapifyError(body, status) {
   if (typeof body.message === "string" && body.message.trim().length > 0) {

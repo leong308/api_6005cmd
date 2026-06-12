@@ -41,6 +41,9 @@ const AGENDA_CACHE_VERSION = "no-placeholder-v2";
 
 tripRouter.use(authMiddleware);
 
+/**
+ * Handles GET / requests for the trip API.
+ */
 tripRouter.get("/", async (req, res, next) => {
   try {
     const trips = await listTrips(req.user.id);
@@ -54,6 +57,9 @@ tripRouter.get("/", async (req, res, next) => {
   }
 });
 
+/**
+ * Handles POST / requests for the trip API.
+ */
 tripRouter.post("/", async (req, res, next) => {
   try {
     assertRequiredFields(req.body, REQUIRED_TRIP_FIELDS);
@@ -69,6 +75,9 @@ tripRouter.post("/", async (req, res, next) => {
   }
 });
 
+/**
+ * Handles GET /:id/weather requests for the trip API.
+ */
 tripRouter.get("/:id/weather", async (req, res, next) => {
   try {
     const trip = await getTripById(req.params.id, req.user.id);
@@ -92,6 +101,9 @@ tripRouter.get("/:id/weather", async (req, res, next) => {
   }
 });
 
+/**
+ * Handles GET /:id/weather/forecast requests for the trip API.
+ */
 tripRouter.get("/:id/weather/forecast", async (req, res, next) => {
   try {
     const trip = await getTripById(req.params.id, req.user.id);
@@ -115,6 +127,9 @@ tripRouter.get("/:id/weather/forecast", async (req, res, next) => {
   }
 });
 
+/**
+ * Handles GET /:id/google-places requests for the trip API.
+ */
 tripRouter.get("/:id/google-places", async (req, res, next) => {
   try {
     const trip = await getTripById(req.params.id, req.user.id);
@@ -132,6 +147,9 @@ tripRouter.get("/:id/google-places", async (req, res, next) => {
   }
 });
 
+/**
+ * Handles GET /:id/recommendations requests for the trip API.
+ */
 tripRouter.get("/:id/recommendations", async (req, res, next) => {
   try {
     const trip = await getTripById(req.params.id, req.user.id);
@@ -166,6 +184,9 @@ tripRouter.get("/:id/recommendations", async (req, res, next) => {
   }
 });
 
+/**
+ * Handles GET /:id/agenda requests for the trip API.
+ */
 tripRouter.get("/:id/agenda", async (req, res, next) => {
   try {
     const trip = await getTripById(req.params.id, req.user.id);
@@ -241,6 +262,9 @@ tripRouter.get("/:id/agenda", async (req, res, next) => {
   }
 });
 
+/**
+ * Handles GET /:id/country-info requests for the trip API.
+ */
 tripRouter.get("/:id/country-info", async (req, res, next) => {
   try {
     const trip = await getTripById(req.params.id, req.user.id);
@@ -276,6 +300,9 @@ tripRouter.get("/:id/country-info", async (req, res, next) => {
   }
 });
 
+/**
+ * Handles GET /:id requests for the trip API.
+ */
 tripRouter.get("/:id", async (req, res, next) => {
   try {
     const trip = await getTripById(req.params.id, req.user.id);
@@ -292,6 +319,9 @@ tripRouter.get("/:id", async (req, res, next) => {
   }
 });
 
+/**
+ * Handles PUT /:id requests for the trip API.
+ */
 tripRouter.put("/:id", async (req, res, next) => {
   try {
     assertProvidedFieldsNotEmpty(req.body, REQUIRED_TRIP_FIELDS);
@@ -310,6 +340,9 @@ tripRouter.put("/:id", async (req, res, next) => {
   }
 });
 
+/**
+ * Handles DELETE /:id requests for the trip API.
+ */
 tripRouter.delete("/:id", async (req, res, next) => {
   try {
     const deleted = await deleteTrip(req.params.id, req.user.id);
@@ -329,6 +362,9 @@ tripRouter.delete("/:id", async (req, res, next) => {
 
 module.exports = { tripRouter };
 
+/**
+ * Resolves the trip country name value.
+ */
 async function resolveTripCountryName(trip) {
   const storedCountry = String(trip.destinationCountry ?? "").trim();
   if (storedCountry.length > 0) {
@@ -347,11 +383,17 @@ async function resolveTripCountryName(trip) {
   throw new HttpError(404, "Country unavailable for this trip.");
 }
 
+/**
+ * Parses the recommendation limit value into the backend format.
+ */
 function parseRecommendationLimit(value) {
   const parsed = Number(value);
   return [3, 5, 10].includes(parsed) ? parsed : 5;
 }
 
+/**
+ * Parses the route map days value into the backend format.
+ */
 function parseRouteMapDays(value) {
   const parsed = Number(value);
   if (!Number.isInteger(parsed)) {
@@ -360,6 +402,9 @@ function parseRouteMapDays(value) {
   return Math.min(Math.max(parsed, 0), 21);
 }
 
+/**
+ * Parses the route map day indexes value into the backend format.
+ */
 function parseRouteMapDayIndexes(value) {
   if (Array.isArray(value)) {
     return value.flatMap(parseRouteMapDayIndexes);
@@ -371,6 +416,9 @@ function parseRouteMapDayIndexes(value) {
     .filter((item) => Number.isInteger(item) && item >= 0 && item < 21);
 }
 
+/**
+ * Parses the availability days value into the backend format.
+ */
 function parseAvailabilityDays(value) {
   const parsed = Number(value);
   if (!Number.isInteger(parsed)) {
@@ -379,6 +427,9 @@ function parseAvailabilityDays(value) {
   return Math.min(Math.max(parsed, 0), 7);
 }
 
+/**
+ * Parses the recommendation limits value into the backend format.
+ */
 function parseRecommendationLimits(value) {
   if (Array.isArray(value)) {
     return value.reduce(
@@ -404,6 +455,9 @@ function parseRecommendationLimits(value) {
     }, {});
 }
 
+/**
+ * Builds the trip cache key payload.
+ */
 function buildTripCacheKey(trip, namespace, options = {}) {
   return [
     trip.id,
@@ -413,6 +467,9 @@ function buildTripCacheKey(trip, namespace, options = {}) {
   ].join(":");
 }
 
+/**
+ * Supports the stable stringify backend flow.
+ */
 function stableStringify(value) {
   if (Array.isArray(value)) {
     return `[${value.map(stableStringify).join(",")}]`;

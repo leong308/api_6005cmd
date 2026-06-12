@@ -31,6 +31,9 @@ const ROUTE_MODES = {
   },
 };
 
+/**
+ * Fetches the route data.
+ */
 async function fetchRoute({
   fromLatitude,
   fromLongitude,
@@ -120,10 +123,16 @@ async function fetchRoute({
   return data;
 }
 
+/**
+ * Fetches the walking route data.
+ */
 async function fetchWalkingRoute(coordinates) {
   return fetchRoute({ ...coordinates, mode: "walk" });
 }
 
+/**
+ * Builds the route request payload.
+ */
 function buildRouteRequest({
   fromLatitude,
   fromLongitude,
@@ -156,6 +165,9 @@ function buildRouteRequest({
   return request;
 }
 
+/**
+ * Supports the route mode config backend flow.
+ */
 function routeModeConfig(value) {
   const normalized = String(value ?? "").trim().toLowerCase();
   const aliases = {
@@ -168,6 +180,9 @@ function routeModeConfig(value) {
   return ROUTE_MODES[key] ?? ROUTE_MODES.walk;
 }
 
+/**
+ * Reads the api key value from configuration or input.
+ */
 function readApiKey() {
   const apiKey = [
     process.env.GOOGLE_ROUTES_API_KEY,
@@ -187,6 +202,9 @@ function readApiKey() {
   return apiKey;
 }
 
+/**
+ * Validates the coordinates input.
+ */
 function validateCoordinates(latitude, longitude, label) {
   if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
     throw new HttpError(
@@ -202,6 +220,9 @@ function validateCoordinates(latitude, longitude, label) {
   }
 }
 
+/**
+ * Builds the route cache key payload.
+ */
 function buildRouteCacheKey({
   fromLatitude,
   fromLongitude,
@@ -218,6 +239,9 @@ function buildRouteCacheKey({
   ].join(",");
 }
 
+/**
+ * Extracts the route error value from a provider response.
+ */
 function extractRouteError(body, status) {
   if (
     typeof body.error?.message === "string" &&
@@ -234,6 +258,9 @@ function extractRouteError(body, status) {
   return `Google Routes API lookup returned status ${status}.`;
 }
 
+/**
+ * Parses the duration seconds value into the backend format.
+ */
 function parseDurationSeconds(value) {
   const match = String(value ?? "").match(/^(\d+(?:\.\d+)?)s$/);
   if (!match) {
@@ -242,6 +269,9 @@ function parseDurationSeconds(value) {
   return Math.round(Number(match[1]));
 }
 
+/**
+ * Decodes the polyline value.
+ */
 function decodePolyline(encoded) {
   const points = [];
   let index = 0;
@@ -266,6 +296,9 @@ function decodePolyline(encoded) {
   return points;
 }
 
+/**
+ * Decodes the polyline value value.
+ */
 function decodePolylineValue(encoded, nextIndex) {
   let result = 0;
   let shift = 0;

@@ -7,6 +7,9 @@
  */
 const { HttpError } = require("../lib/http");
 
+/**
+ * Supports the not found handler backend flow.
+ */
 function notFoundHandler(req, res) {
   res.status(404).json({
     success: false,
@@ -14,6 +17,9 @@ function notFoundHandler(req, res) {
   });
 }
 
+/**
+ * Supports the error handler backend flow.
+ */
 function errorHandler(err, req, res, _next) {
   if (err instanceof HttpError) {
     return res.status(err.statusCode).json({

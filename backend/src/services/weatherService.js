@@ -55,10 +55,16 @@ const DAILY_FIELDS = [
 const currentCache = new Map();
 const dailyForecastCache = new Map();
 
+/**
+ * Supports the cache key backend flow.
+ */
 function cacheKey(latitude, longitude) {
   return `${latitude.toFixed(4)},${longitude.toFixed(4)}`;
 }
 
+/**
+ * Validates the coordinates input.
+ */
 function validateCoordinates(latitude, longitude) {
   if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
     throw new HttpError(400, "Latitude must be a valid number between -90 and 90.");
@@ -71,6 +77,9 @@ function validateCoordinates(latitude, longitude) {
   }
 }
 
+/**
+ * Fetches the current weather data.
+ */
 async function fetchCurrentWeather(latitude, longitude, options = {}) {
   validateCoordinates(latitude, longitude);
 
@@ -103,6 +112,9 @@ async function fetchCurrentWeather(latitude, longitude, options = {}) {
   return data;
 }
 
+/**
+ * Fetches the daily forecast data.
+ */
 async function fetchDailyForecast(
   latitude,
   longitude,
@@ -162,6 +174,9 @@ async function fetchDailyForecast(
   return data;
 }
 
+/**
+ * Fetches the with fallback data.
+ */
 async function fetchWithFallback(label, providers) {
   const failures = [];
 
@@ -187,6 +202,9 @@ async function fetchWithFallback(label, providers) {
   );
 }
 
+/**
+ * Fetches the open meteo current weather data.
+ */
 async function fetchOpenMeteoCurrentWeather(latitude, longitude) {
   const url = new URL(OPEN_METEO_URL);
   url.searchParams.set("latitude", latitude);
@@ -232,6 +250,9 @@ async function fetchOpenMeteoCurrentWeather(latitude, longitude) {
   };
 }
 
+/**
+ * Fetches the open meteo daily forecast data.
+ */
 async function fetchOpenMeteoDailyForecast(
   latitude,
   longitude,
@@ -298,6 +319,9 @@ async function fetchOpenMeteoDailyForecast(
   };
 }
 
+/**
+ * Fetches the open weather current weather data.
+ */
 async function fetchOpenWeatherCurrentWeather(latitude, longitude) {
   const apiKey = readOpenWeatherApiKey();
   const url = new URL(OPENWEATHER_CURRENT_URL);
@@ -334,6 +358,9 @@ async function fetchOpenWeatherCurrentWeather(latitude, longitude) {
   };
 }
 
+/**
+ * Fetches the open weather daily forecast data.
+ */
 async function fetchOpenWeatherDailyForecast(
   latitude,
   longitude,
@@ -394,6 +421,9 @@ async function fetchOpenWeatherDailyForecast(
   };
 }
 
+/**
+ * Fetches the met norway current weather data.
+ */
 async function fetchMetNorwayCurrentWeather(latitude, longitude) {
   const body = await fetchMetNorway(latitude, longitude);
   const timeseries = readMetNorwayTimeseries(body);
@@ -424,6 +454,9 @@ async function fetchMetNorwayCurrentWeather(latitude, longitude) {
   };
 }
 
+/**
+ * Fetches the met norway daily forecast data.
+ */
 async function fetchMetNorwayDailyForecast(
   latitude,
   longitude,
@@ -470,6 +503,9 @@ async function fetchMetNorwayDailyForecast(
   };
 }
 
+/**
+ * Fetches the met norway data.
+ */
 async function fetchMetNorway(latitude, longitude) {
   const url = new URL(MET_NORWAY_URL);
   url.searchParams.set("lat", latitude);
@@ -487,6 +523,9 @@ async function fetchMetNorway(latitude, longitude) {
   });
 }
 
+/**
+ * Fetches the provider json data.
+ */
 async function fetchProviderJson(
   url,
   { provider, errorMessage, headers = {}, extractError },
@@ -514,6 +553,9 @@ async function fetchProviderJson(
   return body;
 }
 
+/**
+ * Parses the iso date value into the backend format.
+ */
 function parseIsoDate(value, fieldName) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     throw new HttpError(400, `${fieldName} must use YYYY-MM-DD format.`);
@@ -530,6 +572,9 @@ function parseIsoDate(value, fieldName) {
   return value;
 }
 
+/**
+ * Validates the date range input.
+ */
 function validateDateRange(startDate, endDate) {
   const start = new Date(`${startDate}T00:00:00.000Z`);
   const end = new Date(`${endDate}T00:00:00.000Z`);
@@ -538,6 +583,9 @@ function validateDateRange(startDate, endDate) {
   }
 }
 
+/**
+ * Reads the open weather api key value from configuration or input.
+ */
 function readOpenWeatherApiKey() {
   const apiKey = String(
     process.env.OPENWEATHER_API_KEY ??
@@ -553,21 +601,33 @@ function readOpenWeatherApiKey() {
   return apiKey;
 }
 
+/**
+ * Reads the number value from configuration or input.
+ */
 function readNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
 
+/**
+ * Supports the first weather backend flow.
+ */
 function firstWeather(value) {
   return Array.isArray(value) && value.length > 0 ? value[0] : {};
 }
 
+/**
+ * Extracts the open weather error value from a provider response.
+ */
 function extractOpenWeatherError(body, status) {
   return typeof body.message === "string" && body.message.trim().length > 0
     ? body.message
     : `OpenWeather returned status ${status}.`;
 }
 
+/**
+ * Normalizes the open weather description value.
+ */
 function normalizeOpenWeatherDescription(weather) {
   const description = String(weather?.description ?? "").trim();
   if (description) {
@@ -577,6 +637,9 @@ function normalizeOpenWeatherDescription(weather) {
   return main || "Unavailable";
 }
 
+/**
+ * Normalizes the open weather main value.
+ */
 function normalizeOpenWeatherMain(value) {
   const main = String(value ?? "").trim();
   if (!main) {
@@ -588,6 +651,9 @@ function normalizeOpenWeatherMain(value) {
   return titleCase(main);
 }
 
+/**
+ * Supports the open weather icon to app icon backend flow.
+ */
 function openWeatherIconToAppIcon(icon, main) {
   const normalizedIcon = String(icon ?? "").toLowerCase();
   if (normalizedIcon.startsWith("01")) {
@@ -615,11 +681,17 @@ function openWeatherIconToAppIcon(icon, main) {
   return weatherGroupToIcon(normalizeOpenWeatherMain(main));
 }
 
+/**
+ * Supports the unix seconds to iso backend flow.
+ */
 function unixSecondsToIso(value) {
   const seconds = Number(value);
   return Number.isFinite(seconds) ? new Date(seconds * 1000).toISOString() : null;
 }
 
+/**
+ * Supports the iso date from unix seconds backend flow.
+ */
 function isoDateFromUnixSeconds(value, timezoneOffsetSeconds = 0) {
   const seconds = Number(value);
   const offset = Number(timezoneOffsetSeconds) || 0;
@@ -629,6 +701,9 @@ function isoDateFromUnixSeconds(value, timezoneOffsetSeconds = 0) {
   return new Date((seconds + offset) * 1000).toISOString().slice(0, 10);
 }
 
+/**
+ * Supports the timezone offset label backend flow.
+ */
 function timezoneOffsetLabel(value) {
   const seconds = Number(value);
   if (!Number.isFinite(seconds)) {
@@ -644,6 +719,9 @@ function timezoneOffsetLabel(value) {
   return `UTC${sign}${hours}:${minutes}`;
 }
 
+/**
+ * Checks whether date in range is true.
+ */
 function isDateInRange(date, startDate, endDate) {
   return (
     /^\d{4}-\d{2}-\d{2}$/.test(date) &&
@@ -652,6 +730,9 @@ function isDateInRange(date, startDate, endDate) {
   );
 }
 
+/**
+ * Gets the daily bucket data.
+ */
 function getDailyBucket(buckets, date) {
   if (!buckets.has(date)) {
     buckets.set(date, {
@@ -673,6 +754,9 @@ function getDailyBucket(buckets, date) {
   return buckets.get(date);
 }
 
+/**
+ * Supports the add daily temperature backend flow.
+ */
 function addDailyTemperature(bucket, main) {
   const temp = readNumber(main?.temp);
   const tempMin = readNumber(main?.temp_min) ?? temp;
@@ -691,6 +775,9 @@ function addDailyTemperature(bucket, main) {
   );
 }
 
+/**
+ * Supports the add met norway daily temperature backend flow.
+ */
 function addMetNorwayDailyTemperature(bucket, item) {
   const details = item.data?.instant?.details ?? {};
   const temperature = readNumber(details.air_temperature);
@@ -698,6 +785,9 @@ function addMetNorwayDailyTemperature(bucket, item) {
   bucket.temperatureMax = maxNumber(bucket.temperatureMax, temperature);
 }
 
+/**
+ * Supports the add daily precipitation backend flow.
+ */
 function addDailyPrecipitation(bucket, item) {
   const probability = readNumber(item.pop);
   if (probability !== null) {
@@ -716,6 +806,9 @@ function addDailyPrecipitation(bucket, item) {
   }
 }
 
+/**
+ * Supports the add met norway daily precipitation backend flow.
+ */
 function addMetNorwayDailyPrecipitation(bucket, item) {
   const details = readMetNorwayForecastBlock(item)?.details ?? {};
   const precipitation = readNumber(details.precipitation_amount);
@@ -725,10 +818,16 @@ function addMetNorwayDailyPrecipitation(bucket, item) {
   }
 }
 
+/**
+ * Supports the add daily wind backend flow.
+ */
 function addDailyWind(bucket, wind) {
   bucket.windSpeedMax = maxNumber(bucket.windSpeedMax, readNumber(wind?.speed));
 }
 
+/**
+ * Supports the add met norway daily wind backend flow.
+ */
 function addMetNorwayDailyWind(bucket, item) {
   const details = item.data?.instant?.details ?? {};
   bucket.windSpeedMax = maxNumber(
@@ -737,6 +836,9 @@ function addMetNorwayDailyWind(bucket, item) {
   );
 }
 
+/**
+ * Supports the add daily condition backend flow.
+ */
 function addDailyCondition(bucket, weather, pop) {
   const conditionMain = normalizeOpenWeatherMain(weather?.main);
   const iconCode = openWeatherIconToAppIcon(weather?.icon, weather?.main);
@@ -752,6 +854,9 @@ function addDailyCondition(bucket, weather, pop) {
   }
 }
 
+/**
+ * Supports the add met norway daily condition backend flow.
+ */
 function addMetNorwayDailyCondition(bucket, item) {
   const symbol = readMetNorwaySymbol(item);
   const conditionMain = metNorwaySymbolToGroup(symbol);
@@ -765,6 +870,9 @@ function addMetNorwayDailyCondition(bucket, item) {
   }
 }
 
+/**
+ * Supports the finalize daily bucket backend flow.
+ */
 function finalizeDailyBucket(bucket) {
   return {
     date: bucket.date,
@@ -783,6 +891,9 @@ function finalizeDailyBucket(bucket) {
   };
 }
 
+/**
+ * Supports the min number backend flow.
+ */
 function minNumber(current, value) {
   if (value === null) {
     return current;
@@ -790,6 +901,9 @@ function minNumber(current, value) {
   return current === null ? value : Math.min(current, value);
 }
 
+/**
+ * Supports the max number backend flow.
+ */
 function maxNumber(current, value) {
   if (value === null) {
     return current;
@@ -797,6 +911,9 @@ function maxNumber(current, value) {
   return current === null ? value : Math.max(current, value);
 }
 
+/**
+ * Supports the round number backend flow.
+ */
 function roundNumber(value) {
   if (value === null) {
     return null;
@@ -804,6 +921,9 @@ function roundNumber(value) {
   return Math.round(value * 10) / 10;
 }
 
+/**
+ * Reads the met norway timeseries value from configuration or input.
+ */
 function readMetNorwayTimeseries(body) {
   const timeseries = body.properties?.timeseries;
   if (!Array.isArray(timeseries)) {
@@ -812,6 +932,9 @@ function readMetNorwayTimeseries(body) {
   return timeseries;
 }
 
+/**
+ * Reads the met norway forecast block value from configuration or input.
+ */
 function readMetNorwayForecastBlock(item) {
   return (
     item.data?.next_6_hours ??
@@ -821,10 +944,16 @@ function readMetNorwayForecastBlock(item) {
   );
 }
 
+/**
+ * Reads the met norway symbol value from configuration or input.
+ */
 function readMetNorwaySymbol(item) {
   return String(readMetNorwayForecastBlock(item)?.summary?.symbol_code ?? "");
 }
 
+/**
+ * Describes the met norway symbol value.
+ */
 function describeMetNorwaySymbol(symbol) {
   const normalized = normalizeMetNorwaySymbol(symbol);
   const description =
@@ -833,6 +962,9 @@ function describeMetNorwaySymbol(symbol) {
   return description || "Unavailable";
 }
 
+/**
+ * Supports the met norway symbol to group backend flow.
+ */
 function metNorwaySymbolToGroup(symbol) {
   const normalized = normalizeMetNorwaySymbol(symbol);
   if (normalized.includes("thunder")) {
@@ -853,16 +985,25 @@ function metNorwaySymbolToGroup(symbol) {
   return "";
 }
 
+/**
+ * Supports the met norway symbol to icon backend flow.
+ */
 function metNorwaySymbolToIcon(symbol) {
   return weatherGroupToIcon(metNorwaySymbolToGroup(symbol));
 }
 
+/**
+ * Normalizes the met norway symbol value.
+ */
 function normalizeMetNorwaySymbol(symbol) {
   return String(symbol ?? "")
     .toLowerCase()
     .replace(/_(day|night|polartwilight)$/u, "");
 }
 
+/**
+ * Supports the weather group to icon backend flow.
+ */
 function weatherGroupToIcon(group) {
   const normalized = String(group ?? "").toLowerCase();
   if (normalized === "clear") {
@@ -886,6 +1027,9 @@ function weatherGroupToIcon(group) {
   return "";
 }
 
+/**
+ * Supports the weather severity score backend flow.
+ */
 function weatherSeverityScore(group) {
   switch (String(group ?? "").toLowerCase()) {
     case "thunderstorm":
@@ -906,16 +1050,25 @@ function weatherSeverityScore(group) {
   }
 }
 
+/**
+ * Converts text to title case.
+ */
 function titleCase(value) {
   return String(value ?? "")
     .toLowerCase()
     .replace(/\b[a-z]/g, (match) => match.toUpperCase());
 }
 
+/**
+ * Describes the weather code value.
+ */
 function describeWeatherCode(code) {
   return WEATHER_CODE_DESCRIPTIONS[code] ?? "Unavailable";
 }
 
+/**
+ * Supports the weather code to group backend flow.
+ */
 function weatherCodeToGroup(code) {
   if ([0, 1, 2].includes(code)) {
     return "Clear";
@@ -935,6 +1088,9 @@ function weatherCodeToGroup(code) {
   return "";
 }
 
+/**
+ * Supports the weather code to icon backend flow.
+ */
 function weatherCodeToIcon(code) {
   if ([0, 1].includes(code)) {
     return "clear";

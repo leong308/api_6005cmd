@@ -22,8 +22,11 @@ npm run dev
 ```env
 MONGO_URI=mongodb+srv://<db_username>:<db_password>@<cluster-host>/smart_travel_planner?retryWrites=true&w=majority
 MONGO_DB_NAME=smart_travel_planner
-JWT_SECRET=replace_with_a_long_random_secret
+# Generate with: node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+JWT_SECRET=
 JWT_EXPIRES_IN=7d
+JWT_ISSUER=
+JWT_AUDIENCE=
 PUBLIC_API_BASE_URL=http://localhost:3000
 PUBLIC_APP_BASE_URL=http://localhost:5173
 EMAIL_PROVIDER=firebase
@@ -59,6 +62,8 @@ In Render, open your backend web service, then go to **Environment** →
 CORS_ORIGIN=https://smart-trip-planner.web.app
 PUBLIC_API_BASE_URL=https://six005cmd-api.onrender.com
 PUBLIC_APP_BASE_URL=https://smart-trip-planner.web.app
+JWT_SECRET=<64-byte-random-hex-secret>
+JWT_EXPIRES_IN=7d
 EMAIL_PROVIDER=firebase
 FIREBASE_AUTH_API_KEY=<your_firebase_web_api_key>
 FIREBASE_AUTH_REQUEST_TIMEOUT_MS=10000
@@ -118,7 +123,7 @@ web API key is in Firebase Console → Project settings → General → Web API 
 - Users are stored in the `users` collection. Trips are stored in the `trips` collection with `ownerUserId`, so each logged-in account only sees its own trips and summaries.
 - Trip summaries, country lookups, agenda responses, and recommendation lookups read cache before provider calls. Trip weather/current forecast data also writes one JSON cache file per trip under `backend/.data/weather-cache`.
 - Auth uses bcrypt password hashes, email verification, and JWT bearer tokens. Register first, open the verification link, then log in. Send the returned token as `Authorization: Bearer <token>` for all `/api/trips/*`, `/api/trips/:id/summary`, and `/api/auth/profile` requests.
-- `JWT_SECRET` must be configured for real deployments. Production startup fails if it is missing, rather than silently signing tokens with a placeholder secret.
+- `JWT_SECRET` must be configured for real deployments. Local development can run without it by using an ephemeral secret, but tokens are invalidated whenever the backend restarts. In production, the API still starts when the secret is missing or weak, but authentication endpoints return a setup error until `JWT_SECRET` is fixed.
 - Email verification links expire after 2 hours by default. Unverified accounts whose verification link has expired are automatically deleted by the backend cleanup job.
 - Forgot-password reset links expire after 2 hours by default. The reset link opens a simple backend-hosted form and clears the reset token after the password is changed.
 - The `users.firstLogin` flag is stored in the database. Login returns it to Flutter, and `POST /api/auth/complete-tour` flips it to `false` after the one-time app tour completes.

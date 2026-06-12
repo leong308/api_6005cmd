@@ -39,6 +39,9 @@ async function fetchCountryData(countryName) {
   return buildUnavailableCountryData(countryName);
 }
 
+/**
+ * Fetches the country data by code data.
+ */
 async function fetchCountryDataByCode(countryCode) {
   const normalizedCode = String(countryCode ?? "").trim().toUpperCase();
   if (!/^[A-Z]{2,3}$/.test(normalizedCode)) {
@@ -73,11 +76,17 @@ async function fetchCountryDataByCode(countryCode) {
   }
 }
 
+/**
+ * Fetches the country name by code data.
+ */
 async function fetchCountryNameByCode(countryCode) {
   const country = await fetchCountryDataByCode(countryCode);
   return country.country;
 }
 
+/**
+ * Maps the rest country data into the API shape.
+ */
 function mapRestCountry(country, fallbackName) {
   // Extract currency name
   let currencyName = "N/A";
@@ -105,6 +114,9 @@ function mapRestCountry(country, fallbackName) {
   };
 }
 
+/**
+ * Fetches the rest country data.
+ */
 async function fetchRestCountry(url) {
   const response = await fetch(url);
   if (!response.ok) {
@@ -124,6 +136,9 @@ async function fetchRestCountry(url) {
   return data[0];
 }
 
+/**
+ * Builds the unavailable country data payload.
+ */
 function buildUnavailableCountryData(countryName) {
   return {
     country: String(countryName).trim(),

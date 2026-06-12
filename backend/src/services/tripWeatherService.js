@@ -21,6 +21,9 @@ const STALE_WEATHER_BACKUP_TTL_MS = readTtlMs(
   24 * 60 * 60 * 1000,
 );
 
+/**
+ * Fetches the current weather for trip data.
+ */
 async function fetchCurrentWeatherForTrip(trip) {
   const cacheKey = buildWeatherCacheKey(trip, "current");
   const cached = await weatherFileCache.getWeatherCacheEntry(
@@ -76,6 +79,9 @@ async function fetchCurrentWeatherForTrip(trip) {
   }
 }
 
+/**
+ * Fetches the daily forecast for trip data.
+ */
 async function fetchDailyForecastForTrip(trip) {
   const cacheKey = buildWeatherCacheKey(trip, "forecast");
   const cached = await weatherFileCache.getWeatherCacheEntry(
@@ -133,6 +139,9 @@ async function fetchDailyForecastForTrip(trip) {
   }
 }
 
+/**
+ * Builds the weather cache key payload.
+ */
 function buildWeatherCacheKey(trip, entryName) {
   return [
     entryName,
@@ -144,6 +153,9 @@ function buildWeatherCacheKey(trip, entryName) {
   ].join(":");
 }
 
+/**
+ * Reads the ttl ms value from configuration or input.
+ */
 function readTtlMs(key, fallback) {
   const value = Number(process.env[key]);
   if (!Number.isFinite(value) || value <= 0) {

@@ -85,6 +85,9 @@ const AGENDA_ROUTE_COLORS = [
 ];
 const routeCache = new Map();
 
+/**
+ * Builds the timed trip agenda payload.
+ */
 async function buildTimedTripAgenda({
   trip,
   dailyWeatherForecast,
@@ -152,6 +155,9 @@ async function buildTimedTripAgenda({
   };
 }
 
+/**
+ * Builds the trip agenda payload.
+ */
 async function buildTripAgenda({
   trip,
   dailyWeatherForecast,
@@ -206,6 +212,9 @@ async function buildTripAgenda({
   };
 }
 
+/**
+ * Builds the agenda day payload.
+ */
 function buildAgendaDay({
   date,
   dayIndex,
@@ -252,6 +261,9 @@ function buildAgendaDay({
   };
 }
 
+/**
+ * Builds the agenda item payload.
+ */
 function buildAgendaItem({ slot, recommendation, weatherNote }) {
   if (!recommendation) {
     return null;
@@ -285,6 +297,9 @@ function buildAgendaItem({ slot, recommendation, weatherNote }) {
   };
 }
 
+/**
+ * Supports the enrich agenda days with route maps backend flow.
+ */
 async function enrichAgendaDaysWithRouteMaps({
   trip,
   days,
@@ -324,6 +339,9 @@ async function enrichAgendaDaysWithRouteMaps({
   );
 }
 
+/**
+ * Builds the day route map payload.
+ */
 async function buildDayRouteMap({ trip, day }) {
   const stops = agendaStopsForDay(trip, day);
   const legSpecs = buildLegSpecs(stops);
@@ -377,6 +395,9 @@ async function buildDayRouteMap({ trip, day }) {
   };
 }
 
+/**
+ * Builds the unavailable route map payload.
+ */
 function buildUnavailableRouteMap({ trip, day, message }) {
   const stops = agendaStopsForDay(trip, day);
   return {
@@ -404,6 +425,9 @@ function buildUnavailableRouteMap({ trip, day, message }) {
   };
 }
 
+/**
+ * Supports the agenda stops for day backend flow.
+ */
 function agendaStopsForDay(trip, day) {
   return [
     {
@@ -435,6 +459,9 @@ function agendaStopsForDay(trip, day) {
   });
 }
 
+/**
+ * Builds the leg specs payload.
+ */
 function buildLegSpecs(stops) {
   const specs = [];
   for (let index = 1; index < stops.length; index += 1) {
@@ -448,6 +475,9 @@ function buildLegSpecs(stops) {
   return specs;
 }
 
+/**
+ * Fetches the agenda route leg data.
+ */
 async function fetchAgendaRouteLeg(spec) {
   const cacheKey = routeLegCacheKey(spec);
   if (routeCache.has(cacheKey)) {
@@ -494,6 +524,9 @@ async function fetchAgendaRouteLeg(spec) {
   }
 }
 
+/**
+ * Builds the fallback route leg payload.
+ */
 function buildFallbackRouteLeg(spec, unavailableReason) {
   const distanceMeters = estimateDistanceMeters(
     spec.from.coordinates,
@@ -519,6 +552,9 @@ function buildFallbackRouteLeg(spec, unavailableReason) {
   };
 }
 
+/**
+ * Builds the scheduled slots payload.
+ */
 function buildScheduledSlots(trip, dates) {
   const placePreferences = placePreferencesForTrip(trip.preferences);
   let placeIndex = 0;
@@ -542,6 +578,9 @@ function buildScheduledSlots(trip, dates) {
   );
 }
 
+/**
+ * Builds the request map payload.
+ */
 function buildRequestMap(scheduledSlots) {
   return scheduledSlots.reduce((requests, slot) => {
     if (!requests.has(slot.requestKey)) {
@@ -554,6 +593,9 @@ function buildRequestMap(scheduledSlots) {
   }, new Map());
 }
 
+/**
+ * Fetches the availability pools data.
+ */
 async function fetchAvailabilityPools({ latitude, longitude, requestMap }) {
   const requests = [...requestMap.entries()];
   const results = new Map();
@@ -589,6 +631,9 @@ async function fetchAvailabilityPools({ latitude, longitude, requestMap }) {
   return results;
 }
 
+/**
+ * Maps the with concurrency data into the API shape.
+ */
 async function mapWithConcurrency(items, limit, iterator) {
   const workers = Array.from({ length: Math.min(limit, items.length) }, async (
     _,
@@ -601,6 +646,9 @@ async function mapWithConcurrency(items, limit, iterator) {
   await Promise.all(workers);
 }
 
+/**
+ * Maps the with concurrency results data into the API shape.
+ */
 async function mapWithConcurrencyResults(items, limit, iterator) {
   const results = new Array(items.length);
   await mapWithConcurrency(items, limit, async (item, index) => {
@@ -609,6 +657,9 @@ async function mapWithConcurrencyResults(items, limit, iterator) {
   return results;
 }
 
+/**
+ * Supports the select recommendation backend flow.
+ */
 function selectRecommendation({ pool, fallbackRecommendations, preference, usedIds }) {
   const candidates = pool.length > 0
     ? pool
@@ -627,10 +678,16 @@ function selectRecommendation({ pool, fallbackRecommendations, preference, usedI
   return recommendation;
 }
 
+/**
+ * Supports the recommendation id backend flow.
+ */
 function recommendationId(recommendation) {
   return recommendation.id || recommendation.name || JSON.stringify(recommendation);
 }
 
+/**
+ * Supports the route leg cache key backend flow.
+ */
 function routeLegCacheKey(spec) {
   return [
     "walk",
@@ -639,12 +696,18 @@ function routeLegCacheKey(spec) {
   ].join("|");
 }
 
+/**
+ * Supports the coordinate key backend flow.
+ */
 function coordinateKey(coordinates) {
   return `${Number(coordinates.latitude).toFixed(5)},${Number(
     coordinates.longitude,
   ).toFixed(5)}`;
 }
 
+/**
+ * Checks whether valid coordinate pair is true.
+ */
 function isValidCoordinatePair(coordinates) {
   return (
     Number.isFinite(coordinates?.latitude) &&
@@ -656,6 +719,9 @@ function isValidCoordinatePair(coordinates) {
   );
 }
 
+/**
+ * Supports the same coordinates backend flow.
+ */
 function sameCoordinates(first, second) {
   return (
     Math.abs(Number(first.latitude) - Number(second.latitude)) < 0.00001 &&
@@ -663,6 +729,9 @@ function sameCoordinates(first, second) {
   );
 }
 
+/**
+ * Supports the estimate distance meters backend flow.
+ */
 function estimateDistanceMeters(from, to) {
   const earthRadiusMeters = 6371000;
   const lat1 = degreesToRadians(from.latitude);
@@ -677,10 +746,16 @@ function estimateDistanceMeters(from, to) {
   );
 }
 
+/**
+ * Supports the degrees to radians backend flow.
+ */
 function degreesToRadians(value) {
   return (Number(value) * Math.PI) / 180;
 }
 
+/**
+ * Supports the flatten recommendations backend flow.
+ */
 function flattenRecommendations(recommendationGroups = []) {
   return recommendationGroups.flatMap((group) =>
     (group.recommendations ?? []).map((recommendation) => ({
@@ -690,10 +765,16 @@ function flattenRecommendations(recommendationGroups = []) {
   );
 }
 
+/**
+ * Checks whether agenda items is available.
+ */
 function hasAgendaItems(days) {
   return days.some((day) => day.items.length > 0);
 }
 
+/**
+ * Builds the insufficient agenda payload.
+ */
 function buildInsufficientAgenda({ dates, dailyWeatherForecast, strategy }) {
   return {
     title: "Insufficient data to plan an agenda",
@@ -711,6 +792,9 @@ function buildInsufficientAgenda({ dates, dailyWeatherForecast, strategy }) {
   };
 }
 
+/**
+ * Supports the trip dates backend flow.
+ */
 function tripDates(startDate, endDate) {
   const start = parseDate(startDate);
   const end = parseDate(endDate);
@@ -727,11 +811,17 @@ function tripDates(startDate, endDate) {
   return dates;
 }
 
+/**
+ * Parses the date value into the backend format.
+ */
 function parseDate(value) {
   const date = new Date(`${value}T00:00:00.000Z`);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+/**
+ * Supports the foursquare open at backend flow.
+ */
 function foursquareOpenAt(date, time) {
   const parsed = parseDate(date);
   if (!parsed) {
@@ -742,6 +832,9 @@ function foursquareOpenAt(date, time) {
   return `${foursquareDay}T${time.replace(":", "")}`;
 }
 
+/**
+ * Supports the place preferences for trip backend flow.
+ */
 function placePreferencesForTrip(preferences = []) {
   const filtered = (Array.isArray(preferences) ? preferences : [])
     .map((preference) => String(preference).trim().toLowerCase())
@@ -750,6 +843,9 @@ function placePreferencesForTrip(preferences = []) {
   return unique.length > 0 ? unique : DEFAULT_PLACE_PREFERENCES;
 }
 
+/**
+ * Supports the weather tip backend flow.
+ */
 function weatherTip(forecast) {
   if (!forecast) {
     return "Check live weather before leaving.";
@@ -768,6 +864,9 @@ function weatherTip(forecast) {
   return "Good day for a balanced indoor and outdoor route.";
 }
 
+/**
+ * Supports the theme for preference backend flow.
+ */
 function themeForPreference(preference) {
   const normalized = String(preference ?? "").trim().toLowerCase();
   const labels = {
@@ -786,6 +885,9 @@ function themeForPreference(preference) {
   return labels[normalized] ?? "Local discovery";
 }
 
+/**
+ * Supports the clamp route map days backend flow.
+ */
 function clampRouteMapDays(value) {
   const parsed = Number(value);
   if (!Number.isInteger(parsed)) {
@@ -794,6 +896,9 @@ function clampRouteMapDays(value) {
   return Math.min(Math.max(parsed, 0), MAX_ROUTE_MAP_DAYS);
 }
 
+/**
+ * Supports the clamp availability days backend flow.
+ */
 function clampAvailabilityDays(value) {
   const parsed = Number(value);
   if (!Number.isInteger(parsed)) {
@@ -802,6 +907,9 @@ function clampAvailabilityDays(value) {
   return Math.min(Math.max(parsed, 0), MAX_AVAILABILITY_DAYS);
 }
 
+/**
+ * Builds the checklist payload.
+ */
 function buildChecklist(trip) {
   return [
     `Confirm transport from your stay to ${trip.destinationName}.`,

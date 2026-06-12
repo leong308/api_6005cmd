@@ -10,6 +10,9 @@ const { authMiddleware } = require("../middleware/authMiddleware");
 
 const summaryRouter = express.Router();
 
+/**
+ * Handles GET /:id/summary requests for the summary API.
+ */
 summaryRouter.get("/:id/summary", authMiddleware, getTripSummary);
 
 module.exports = {
