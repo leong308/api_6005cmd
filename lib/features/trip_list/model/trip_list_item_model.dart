@@ -23,13 +23,19 @@ class TripListItemModel {
 
   factory TripListItemModel.fromJson(Map<String, dynamic> json) {
     return TripListItemModel(
-      id: _asString(json['id']),
-      destinationName: _asString(json['destinationName']),
-      destinationCountry: _asString(json['destinationCountry']),
-      latitude: _asDouble(json['latitude']),
-      longitude: _asDouble(json['longitude']),
-      startDate: _asDate(json['startDate']),
-      endDate: _asDate(json['endDate']),
+      id: _asRequiredString(json['id'], 'id'),
+      destinationName: _asRequiredString(
+        json['destinationName'],
+        'destinationName',
+      ),
+      destinationCountry: _asRequiredString(
+        json['destinationCountry'],
+        'destinationCountry',
+      ),
+      latitude: _asDouble(json['latitude'], 'latitude'),
+      longitude: _asDouble(json['longitude'], 'longitude'),
+      startDate: _asDate(json['startDate'], 'startDate'),
+      endDate: _asDate(json['endDate'], 'endDate'),
       preferences: _asStringList(json['preferences']),
       travelNotes: _asString(json['travelNotes']),
     );
@@ -56,15 +62,34 @@ class TripListItemModel {
 
   static String _asString(Object? value) => value?.toString() ?? '';
 
-  static double _asDouble(Object? value) {
-    if (value is num) {
-      return value.toDouble();
+  static String _asRequiredString(Object? value, String fieldName) {
+    final parsed = _asString(value).trim();
+    if (parsed.isEmpty) {
+      throw FormatException('Trip field "$fieldName" is missing.');
     }
-    return double.tryParse(value?.toString() ?? '') ?? 0;
+    return parsed;
   }
 
-  static DateTime _asDate(Object? value) {
-    return DateTime.tryParse(value?.toString() ?? '') ?? DateTime.now();
+  static double _asDouble(Object? value, String fieldName) {
+    if (value is num) {
+      final parsed = value.toDouble();
+      if (parsed.isFinite) {
+        return parsed;
+      }
+    }
+    final parsed = double.tryParse(value?.toString() ?? '');
+    if (parsed == null || !parsed.isFinite) {
+      throw FormatException('Trip field "$fieldName" is not a number.');
+    }
+    return parsed;
+  }
+
+  static DateTime _asDate(Object? value, String fieldName) {
+    final parsed = DateTime.tryParse(value?.toString() ?? '');
+    if (parsed == null) {
+      throw FormatException('Trip field "$fieldName" is not a valid date.');
+    }
+    return parsed;
   }
 
   static List<String> _asStringList(Object? value) {

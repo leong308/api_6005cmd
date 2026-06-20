@@ -3,13 +3,26 @@
  * Intercepts all errors, formats them cleanly, and conditionally prints stack traces in development mode.
  */
 const globalErrorHandler = (err, req, res, next) => {
-  const statusCode = err.status || err.statusCode || 500;
+  const requestedStatusCode = Number(err.status || err.statusCode);
+  const statusCode =
+    Number.isInteger(requestedStatusCode) &&
+    requestedStatusCode >= 400 &&
+    requestedStatusCode <= 599
+      ? requestedStatusCode
+      : 500;
   const isDev = process.env.NODE_ENV !== "production";
+  const message =
+    statusCode >= 500 && !isDev
+      ? "Internal Server Error"
+      : err.message || "Internal Server Error";
 
   const response = {
     success: false,
     statusCode,
-    message: err.message || "Internal Server Error",
+    message,
+    ...(err.details !== undefined && (statusCode < 500 || isDev)
+      ? { details: err.details }
+      : {}),
   };
 
   if (isDev) {

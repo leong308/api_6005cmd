@@ -34,6 +34,7 @@ class _AddTripPageState extends State<AddTripPage> {
   final MapSelectionGuard _mapSelectionGuard = MapSelectionGuard();
   late double _latitude;
   late double _longitude;
+  bool _hasSelectedCoordinate = false;
   bool _isSaving = false;
   bool _isLookingUpCountry = false;
   String? _countryLookupMessage;
@@ -44,8 +45,8 @@ class _AddTripPageState extends State<AddTripPage> {
     super.initState();
     _destinationController = TextEditingController();
     _countryController = TextEditingController();
-    _latitude = 0;
-    _longitude = 0;
+    _latitude = OsmCoordinatePicker.malaysiaLatitude;
+    _longitude = OsmCoordinatePicker.malaysiaLongitude;
     _startDateController = TextEditingController();
     _endDateController = TextEditingController();
     _notesController = TextEditingController();
@@ -106,7 +107,29 @@ class _AddTripPageState extends State<AddTripPage> {
     return null;
   }
 
-  bool get _canCreateTrip => !_isSaving && _dateValidationMessage == null;
+  String? get _formValidationMessage {
+    if (_destinationController.text.trim().isEmpty) {
+      return 'Enter a destination name.';
+    }
+    if (_isLookingUpCountry) {
+      return 'Wait for the country lookup to finish.';
+    }
+    if (!_hasSelectedCoordinate) {
+      return 'Tap the map to select the exact destination.';
+    }
+    if (_countryController.text.trim().isEmpty) {
+      return 'Pin a location where a destination country can be identified.';
+    }
+    if (!_latitude.isFinite || _latitude < -90 || _latitude > 90) {
+      return 'Select a valid latitude.';
+    }
+    if (!_longitude.isFinite || _longitude < -180 || _longitude > 180) {
+      return 'Select a valid longitude.';
+    }
+    return _dateValidationMessage;
+  }
+
+  bool get _canCreateTrip => !_isSaving && _formValidationMessage == null;
 
   double get _completionScore {
     var filled = 0;
@@ -115,8 +138,12 @@ class _AddTripPageState extends State<AddTripPage> {
     final end = _endDate;
     if (_destinationController.text.trim().isNotEmpty) filled++;
     if (_countryController.text.trim().isNotEmpty) filled++;
-    if (_latitude >= -90 && _latitude <= 90) filled++;
-    if (_longitude >= -180 && _longitude <= 180) filled++;
+    if (_hasSelectedCoordinate && _latitude >= -90 && _latitude <= 90) {
+      filled++;
+    }
+    if (_hasSelectedCoordinate && _longitude >= -180 && _longitude <= 180) {
+      filled++;
+    }
     if (start != null && start.isAfter(_today)) filled++;
     if (start != null && end != null && !end.isBefore(start)) filled++;
     if (_selectedPreferences.isNotEmpty) filled++;
@@ -130,9 +157,7 @@ class _AddTripPageState extends State<AddTripPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(
-          title: 'Add Trip',
-        ),
+        const SectionHeader(title: 'Add Trip'),
         const SizedBox(height: 12),
         _FormReadiness(score: _completionScore),
         const SizedBox(height: 16),
@@ -173,6 +198,7 @@ class _AddTripPageState extends State<AddTripPage> {
       OsmCoordinatePicker(
         latitude: _latitude,
         longitude: _longitude,
+        hasSelection: _hasSelectedCoordinate,
         onCoordinateSelected: (latitude, longitude) {
           if (!_mapSelectionGuard.acceptsSelection) {
             return;
@@ -180,6 +206,7 @@ class _AddTripPageState extends State<AddTripPage> {
           setState(() {
             _latitude = latitude;
             _longitude = longitude;
+            _hasSelectedCoordinate = true;
             _countryController.clear();
           });
           _lookupCountry(latitude, longitude);
@@ -216,10 +243,10 @@ class _AddTripPageState extends State<AddTripPage> {
           ),
         ],
       ),
-      if (_dateValidationMessage != null) ...[
+      if (_formValidationMessage != null) ...[
         const SizedBox(height: 6),
         Text(
-          _dateValidationMessage!,
+          _formValidationMessage!,
           style: Theme.of(
             context,
           ).textTheme.bodySmall?.copyWith(color: AppPalette.coral),
@@ -443,11 +470,11 @@ class _AddTripPageState extends State<AddTripPage> {
   }
 
   Future<void> _createTrip() async {
-    final dateError = _dateValidationMessage;
-    if (dateError != null) {
+    final validationError = _formValidationMessage;
+    if (validationError != null) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(dateError)));
+      ).showSnackBar(SnackBar(content: Text(validationError)));
       return;
     }
 

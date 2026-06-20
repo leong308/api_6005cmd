@@ -27,6 +27,10 @@ class ApiClient {
     _authToken = token;
   }
 
+  void close() {
+    _httpClient.close();
+  }
+
   Future<Map<String, dynamic>> getJson(String path) async {
     try {
       final response = await _httpClient
@@ -106,7 +110,15 @@ class ApiClient {
   }
 
   Map<String, dynamic> _decodeObject(http.Response response) {
-    final decoded = response.body.isEmpty ? null : jsonDecode(response.body);
+    Object? decoded;
+    try {
+      decoded = response.body.isEmpty ? null : jsonDecode(response.body);
+    } on FormatException {
+      throw ApiException(
+        response.statusCode >= 400 ? response.statusCode : 502,
+        'API returned malformed JSON.',
+      );
+    }
     final body = decoded is Map<String, dynamic> ? decoded : null;
 
     if (response.statusCode < 200 || response.statusCode >= 300) {

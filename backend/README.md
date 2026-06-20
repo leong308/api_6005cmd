@@ -53,6 +53,12 @@ MET_NORWAY_USER_AGENT=SmartTripPlanner/1.0 (your-email@example.com)
 
 This matches `lib/core/api/api_config.dart`.
 
+5. Run regression tests:
+
+```bash
+npm test
+```
+
 ## Render Environment Variables
 
 In Render, open your backend web service, then go to **Environment** →

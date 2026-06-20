@@ -9,12 +9,17 @@ class OsmCoordinatePicker extends StatelessWidget {
     required this.longitude,
     required this.onCoordinateSelected,
     this.height = 250,
+    this.hasSelection = true,
   });
+
+  static const double malaysiaLatitude = 4.2105;
+  static const double malaysiaLongitude = 101.9758;
 
   final double latitude;
   final double longitude;
   final void Function(double latitude, double longitude) onCoordinateSelected;
   final double height;
+  final bool hasSelection;
 
   @override
   Widget build(BuildContext context) {
@@ -26,21 +31,21 @@ class OsmCoordinatePicker extends StatelessWidget {
             Expanded(
               child: _CoordinateValue(
                 label: 'Latitude',
-                value: latitude.toStringAsFixed(6),
+                value: hasSelection ? latitude.toStringAsFixed(6) : 'Not set',
               ),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: _CoordinateValue(
                 label: 'Longitude',
-                value: longitude.toStringAsFixed(6),
+                value: hasSelection ? longitude.toStringAsFixed(6) : 'Not set',
               ),
             ),
           ],
         ),
         const SizedBox(height: 8),
         Text(
-          'Tap on the OpenFreeMap vector map to pin the exact location.',
+          'Tap on the Mapbox map to pin the exact location.',
           style: Theme.of(
             context,
           ).textTheme.bodySmall?.copyWith(color: AppPalette.inkA(0.62)),
@@ -52,19 +57,22 @@ class OsmCoordinatePicker extends StatelessWidget {
             height: height,
             child: FreeVectorMap(
               key: ValueKey(
-                '${latitude.toStringAsFixed(5)},${longitude.toStringAsFixed(5)}',
+                '${latitude.toStringAsFixed(5)},'
+                '${longitude.toStringAsFixed(5)},$hasSelection',
               ),
               centerLatitude: latitude,
               centerLongitude: longitude,
-              initialZoom: 16,
-              markers: [
-                FreeVectorMapPoint(
-                  latitude: latitude,
-                  longitude: longitude,
-                  color: AppPalette.coral,
-                  radius: 9,
-                ),
-              ],
+              initialZoom: hasSelection ? 16 : 6,
+              markers: hasSelection
+                  ? [
+                      FreeVectorMapPoint(
+                        latitude: latitude,
+                        longitude: longitude,
+                        color: AppPalette.coral,
+                        radius: 9,
+                      ),
+                    ]
+                  : const [],
               onTap: onCoordinateSelected,
             ),
           ),

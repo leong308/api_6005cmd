@@ -7,6 +7,7 @@
 const localStore = require("./store");
 const cacheRepository = require("./cacheRepository");
 const { getDb, isMongoConfigured } = require("../db/mongo");
+const { normalizeTripPayload } = require("../lib/tripValidation");
 
 const TRIPS_COLLECTION = "trips";
 const USERS_COLLECTION = "users";
@@ -52,14 +53,15 @@ async function getTripById(id, ownerUserId = null) {
  * Creates the trip data.
  */
 async function createTrip(payload, ownerUserId = null) {
+  const normalizedPayload = normalizeTripPayload(payload);
   if (!isMongoConfigured()) {
-    return localStore.createTrip({ ...payload, ownerUserId });
+    return localStore.createTrip({ ...normalizedPayload, ownerUserId });
   }
 
   const collection = await tripsCollection();
   const now = new Date().toISOString();
   const created = {
-    ...normalizeTripPayload(payload),
+    ...normalizedPayload,
     id: await generateTripId(collection),
     ownerUserId: ownerUserId ? String(ownerUserId) : null,
     createdAt: now,
@@ -79,8 +81,9 @@ async function updateTrip(id, payload, ownerUserId = null) {
     if (!current || (ownerUserId && current.ownerUserId !== ownerUserId)) {
       return null;
     }
+    const normalizedPayload = normalizeTripPayload(payload, current);
     return localStore.updateTrip(id, {
-      ...payload,
+      ...normalizedPayload,
       ownerUserId:
         current.ownerUserId ?? (ownerUserId ? String(ownerUserId) : null),
     });
@@ -468,50 +471,6 @@ async function generateUserId(collection) {
     return Number.isNaN(value) ? max : Math.max(max, value);
   }, 0);
   return `user_${String(maxNumber + 1).padStart(3, "0")}`;
-}
-
-/**
- * Normalizes the trip payload value.
- */
-function normalizeTripPayload(payload, current = {}) {
-  return {
-    destinationName:
-      payload.destinationName !== undefined
-        ? String(payload.destinationName).trim()
-        : current.destinationName,
-    destinationCountry:
-      payload.destinationCountry !== undefined
-        ? String(payload.destinationCountry).trim()
-        : current.destinationCountry,
-    latitude:
-      payload.latitude !== undefined ? Number(payload.latitude) : current.latitude,
-    longitude:
-      payload.longitude !== undefined
-        ? Number(payload.longitude)
-        : current.longitude,
-    startDate:
-      payload.startDate !== undefined ? String(payload.startDate) : current.startDate,
-    endDate:
-      payload.endDate !== undefined ? String(payload.endDate) : current.endDate,
-    preferences:
-      payload.preferences !== undefined
-        ? normalizePreferenceList(payload.preferences)
-        : current.preferences ?? [],
-    travelNotes:
-      payload.travelNotes !== undefined
-        ? String(payload.travelNotes)
-        : current.travelNotes ?? "",
-  };
-}
-
-/**
- * Normalizes the preference list value.
- */
-function normalizePreferenceList(value) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.map((item) => String(item));
 }
 
 /**

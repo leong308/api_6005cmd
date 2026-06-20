@@ -13,8 +13,6 @@ const summaryService = require("../services/summaryService");
 async function getTripSummary(req, res, next) {
   try {
     const tripId = req.params.id;
-    const host = req.headers.host || "localhost:3000";
-    const scheme = req.secure ? "https" : "http";
     const recommendationLimit = parseRecommendationLimit(
       req.query.recommendationLimit,
     );
@@ -30,20 +28,15 @@ async function getTripSummary(req, res, next) {
       req.query.refresh ?? req.query.forceRefresh,
     );
 
-    const summaryData = await summaryService.generateSummary(
-      tripId,
-      host,
-      scheme,
-      {
-        recommendationLimit,
-        recommendationLimits,
-        routeMapDays,
-        routeMapDayIndexes,
-        availabilityDays,
-        forceRefresh,
-        userId: req.user.id,
-      },
-    );
+    const summaryData = await summaryService.generateSummary(tripId, {
+      recommendationLimit,
+      recommendationLimits,
+      routeMapDays,
+      routeMapDayIndexes,
+      availabilityDays,
+      forceRefresh,
+      userId: req.user.id,
+    });
 
     return res.status(200).json({
       success: true,

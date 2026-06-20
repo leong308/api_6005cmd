@@ -64,6 +64,12 @@ function resolveCorsOrigin(origin, callback) {
  * Checks whether local development origin is true.
  */
 function isLocalDevelopmentOrigin(origin) {
+  if (
+    String(process.env.NODE_ENV ?? "").trim().toLowerCase() === "production"
+  ) {
+    return false;
+  }
+
   try {
     const url = new URL(origin);
     const hostname = url.hostname.toLowerCase();

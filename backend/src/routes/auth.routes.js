@@ -60,8 +60,9 @@ authRouter.post("/register", async (req, res, next) => {
     }
 
     const password = String(req.body.password);
-    const email = String(req.body.email);
-    const name = String(req.body.name);
+    const email = String(req.body.email).trim().toLowerCase();
+    const name = String(req.body.name).trim();
+    validateRegistrationInput({ email, name, password });
 
     // Hash the password before storing
     const hashedPassword = await hashPassword(password);
@@ -148,7 +149,7 @@ authRouter.get("/verify-email", async (req, res, next) => {
     }
 
     const expiresAt = new Date(user.emailVerificationExpiresAt ?? 0);
-    if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() < Date.now()) {
+    if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= Date.now()) {
       await cleanupExpiredUnverifiedUsers();
       return sendVerificationResponse(req, res, {
         statusCode: 400,
@@ -299,12 +300,12 @@ authRouter.post("/reset-password", async (req, res, next) => {
     assertRequiredFields(req.body, ["token", "password"]);
     const token = String(req.body.token ?? "").trim();
     const password = String(req.body.password ?? "");
-    if (password.length < 8) {
+    if (password.length < 8 || password.length > 128) {
       return sendPasswordResetResponse(req, res, {
         statusCode: 400,
         success: false,
-        title: "Password Too Short",
-        message: "Use a password with at least 8 characters.",
+        title: "Invalid Password Length",
+        message: "Use a password between 8 and 128 characters.",
       });
     }
 
@@ -516,10 +517,7 @@ function isFirebaseError(error, code) {
  * Builds the verification url payload.
  */
 function buildVerificationUrl(req, token) {
-  const configuredBase = String(process.env.PUBLIC_API_BASE_URL ?? "").trim();
-  const baseUrl =
-    configuredBase ||
-    `${req.protocol}://${req.get("host")}`;
+  const baseUrl = resolvePublicApiBaseUrl(req);
   return `${baseUrl.replace(/\/$/, "")}/api/auth/verify-email?token=${encodeURIComponent(token)}`;
 }
 
@@ -527,9 +525,37 @@ function buildVerificationUrl(req, token) {
  * Builds the password reset url payload.
  */
 function buildPasswordResetUrl(req, token) {
-  const configuredBase = String(process.env.PUBLIC_API_BASE_URL ?? "").trim();
-  const baseUrl = configuredBase || `${req.protocol}://${req.get("host")}`;
+  const baseUrl = resolvePublicApiBaseUrl(req);
   return `${baseUrl.replace(/\/$/, "")}/api/auth/reset-password?token=${encodeURIComponent(token)}`;
+}
+
+function resolvePublicApiBaseUrl(req) {
+  const configuredBase = String(process.env.PUBLIC_API_BASE_URL ?? "").trim();
+  if (configuredBase) {
+    try {
+      const url = new URL(configuredBase);
+      if (url.protocol === "http:" || url.protocol === "https:") {
+        return configuredBase;
+      }
+    } catch (_error) {
+      // Fall through to the configuration error below.
+    }
+    throw new HttpError(
+      503,
+      "PUBLIC_API_BASE_URL must be a valid HTTP(S) URL.",
+    );
+  }
+
+  if (
+    String(process.env.NODE_ENV ?? "").trim().toLowerCase() === "production"
+  ) {
+    throw new HttpError(
+      503,
+      "PUBLIC_API_BASE_URL is required in production.",
+    );
+  }
+
+  return `${req.protocol}://${req.get("host")}`;
 }
 
 /**
@@ -546,7 +572,7 @@ function validatePasswordResetUser(user) {
   }
 
   const expiresAt = new Date(user.passwordResetExpiresAt ?? 0);
-  if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() < Date.now()) {
+  if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= Date.now()) {
     return {
       valid: false,
       title: "Reset Link Expired",
@@ -555,6 +581,24 @@ function validatePasswordResetUser(user) {
   }
 
   return { valid: true };
+}
+
+function validateRegistrationInput({ email, name, password }) {
+  if (name.length < 2 || name.length > 100) {
+    throw new HttpError(400, "Name must be between 2 and 100 characters.");
+  }
+  if (
+    email.length > 254 ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  ) {
+    throw new HttpError(400, "Enter a valid email address.");
+  }
+  if (password.length < 8 || password.length > 128) {
+    throw new HttpError(
+      400,
+      "Password must be between 8 and 128 characters.",
+    );
+  }
 }
 
 /**

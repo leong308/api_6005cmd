@@ -11,6 +11,7 @@ const path = require("path");
 const CACHE_DIR =
   process.env.TRIP_WEATHER_CACHE_DIR ||
   path.join(__dirname, "..", "..", ".data", "weather-cache");
+const tripWriteQueues = new Map();
 
 /**
  * Gets the weather cache entry data.
@@ -67,24 +68,26 @@ async function getStaleWeatherCacheEntry(
  * Deletes the weather cache entry data.
  */
 async function deleteWeatherCacheEntry(tripId, entryName, cacheKey) {
-  const file = await readTripCacheFile(tripId);
-  const entry = file.entries?.[entryName];
-  if (!entry || entry.cacheKey !== cacheKey) {
-    return;
-  }
+  await withTripWriteLock(tripId, async () => {
+    const file = await readTripCacheFile(tripId);
+    const entry = file.entries?.[entryName];
+    if (!entry || entry.cacheKey !== cacheKey) {
+      return;
+    }
 
-  const nextEntries = { ...(file.entries ?? {}) };
-  delete nextEntries[entryName];
+    const nextEntries = { ...(file.entries ?? {}) };
+    delete nextEntries[entryName];
 
-  if (Object.keys(nextEntries).length === 0) {
-    await deleteTripWeatherCache(tripId);
-    return;
-  }
+    if (Object.keys(nextEntries).length === 0) {
+      await deleteTripWeatherCacheUnlocked(tripId);
+      return;
+    }
 
-  await writeTripCacheFile(tripId, {
-    ...file,
-    updatedAt: new Date().toISOString(),
-    entries: nextEntries,
+    await writeTripCacheFile(tripId, {
+      ...file,
+      updatedAt: new Date().toISOString(),
+      entries: nextEntries,
+    });
   });
 }
 
@@ -99,35 +102,43 @@ async function setWeatherCacheEntry({
   ttlMs,
   provider,
 }) {
-  const now = new Date();
-  const file = await readTripCacheFile(trip.id);
-  const nextFile = {
-    tripId: String(trip.id),
-    tripUpdatedAt: trip.updatedAt ?? null,
-    coordinates: {
-      latitude: Number(trip.latitude),
-      longitude: Number(trip.longitude),
-    },
-    updatedAt: now.toISOString(),
-    entries: {
-      ...(file.entries ?? {}),
-      [entryName]: {
-        cacheKey,
-        provider,
-        cachedAt: now.toISOString(),
-        expiresAt: new Date(now.getTime() + ttlMs).toISOString(),
-        data,
+  await withTripWriteLock(trip.id, async () => {
+    const now = new Date();
+    const file = await readTripCacheFile(trip.id);
+    const nextFile = {
+      tripId: String(trip.id),
+      tripUpdatedAt: trip.updatedAt ?? null,
+      coordinates: {
+        latitude: Number(trip.latitude),
+        longitude: Number(trip.longitude),
       },
-    },
-  };
+      updatedAt: now.toISOString(),
+      entries: {
+        ...(file.entries ?? {}),
+        [entryName]: {
+          cacheKey,
+          provider,
+          cachedAt: now.toISOString(),
+          expiresAt: new Date(now.getTime() + ttlMs).toISOString(),
+          data,
+        },
+      },
+    };
 
-  await writeTripCacheFile(trip.id, nextFile);
+    await writeTripCacheFile(trip.id, nextFile);
+  });
 }
 
 /**
  * Deletes the trip weather cache data.
  */
 async function deleteTripWeatherCache(tripId) {
+  await withTripWriteLock(tripId, () =>
+    deleteTripWeatherCacheUnlocked(tripId),
+  );
+}
+
+async function deleteTripWeatherCacheUnlocked(tripId) {
   try {
     await fs.unlink(cachePath(tripId));
   } catch (error) {
@@ -159,7 +170,30 @@ async function readTripCacheFile(tripId) {
  */
 async function writeTripCacheFile(tripId, value) {
   await fs.mkdir(CACHE_DIR, { recursive: true });
-  await fs.writeFile(cachePath(tripId), JSON.stringify(value, null, 2));
+  const targetPath = cachePath(tripId);
+  const temporaryPath = `${targetPath}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    await fs.writeFile(temporaryPath, JSON.stringify(value, null, 2));
+    await fs.rename(temporaryPath, targetPath);
+  } catch (error) {
+    await fs.unlink(temporaryPath).catch(() => {});
+    throw error;
+  }
+}
+
+async function withTripWriteLock(tripId, action) {
+  const key = String(tripId);
+  const previous = tripWriteQueues.get(key) ?? Promise.resolve();
+  const operation = previous.catch(() => {}).then(action);
+  tripWriteQueues.set(key, operation);
+
+  try {
+    return await operation;
+  } finally {
+    if (tripWriteQueues.get(key) === operation) {
+      tripWriteQueues.delete(key);
+    }
+  }
 }
 
 /**

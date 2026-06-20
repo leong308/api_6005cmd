@@ -53,6 +53,7 @@ class _ShellPageState extends State<ShellPage> {
   @override
   void dispose() {
     _tourController.dispose();
+    _apiClient.close();
     super.dispose();
   }
 

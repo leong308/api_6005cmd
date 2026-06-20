@@ -24,26 +24,29 @@ const STALE_WEATHER_BACKUP_TTL_MS = readTtlMs(
 /**
  * Fetches the current weather for trip data.
  */
-async function fetchCurrentWeatherForTrip(trip) {
+async function fetchCurrentWeatherForTrip(trip, options = {}) {
   const cacheKey = buildWeatherCacheKey(trip, "current");
-  const cached = await weatherFileCache.getWeatherCacheEntry(
-    trip,
-    "current",
-    cacheKey,
-  );
-  if (cached) {
-    return {
-      data: cached.data,
-      provider: cached.provider ?? cached.data?.provider ?? "weather-cache",
-      cached: true,
-      stale: false,
-    };
+  if (!options.forceRefresh) {
+    const cached = await weatherFileCache.getWeatherCacheEntry(
+      trip,
+      "current",
+      cacheKey,
+    );
+    if (cached) {
+      return {
+        data: cached.data,
+        provider: cached.provider ?? cached.data?.provider ?? "weather-cache",
+        cached: true,
+        stale: false,
+      };
+    }
   }
 
   try {
     const data = await weatherService.fetchCurrentWeather(
       Number(trip.latitude),
       Number(trip.longitude),
+      { forceRefresh: options.forceRefresh },
     );
     await weatherFileCache.setWeatherCacheEntry({
       trip,
@@ -82,20 +85,22 @@ async function fetchCurrentWeatherForTrip(trip) {
 /**
  * Fetches the daily forecast for trip data.
  */
-async function fetchDailyForecastForTrip(trip) {
+async function fetchDailyForecastForTrip(trip, options = {}) {
   const cacheKey = buildWeatherCacheKey(trip, "forecast");
-  const cached = await weatherFileCache.getWeatherCacheEntry(
-    trip,
-    "forecast",
-    cacheKey,
-  );
-  if (cached) {
-    return {
-      data: cached.data,
-      provider: cached.provider ?? cached.data?.provider ?? "weather-cache",
-      cached: true,
-      stale: false,
-    };
+  if (!options.forceRefresh) {
+    const cached = await weatherFileCache.getWeatherCacheEntry(
+      trip,
+      "forecast",
+      cacheKey,
+    );
+    if (cached) {
+      return {
+        data: cached.data,
+        provider: cached.provider ?? cached.data?.provider ?? "weather-cache",
+        cached: true,
+        stale: false,
+      };
+    }
   }
 
   try {
@@ -104,6 +109,7 @@ async function fetchDailyForecastForTrip(trip) {
       Number(trip.longitude),
       trip.startDate,
       trip.endDate,
+      { forceRefresh: options.forceRefresh },
     );
     await weatherFileCache.setWeatherCacheEntry({
       trip,

@@ -39,8 +39,17 @@ async function waitForRateLimit() {
  * Supports the reverse geocode backend flow.
  */
 async function reverseGeocode(latitude, longitude) {
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-    throw new HttpError(400, "Latitude and longitude must be valid numbers.");
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
+    throw new HttpError(
+      400,
+      "Latitude must be a valid number between -90 and 90.",
+    );
+  }
+  if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+    throw new HttpError(
+      400,
+      "Longitude must be a valid number between -180 and 180.",
+    );
   }
 
   const key = cacheKey(latitude, longitude);

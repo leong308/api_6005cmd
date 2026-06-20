@@ -14,13 +14,14 @@ const { HttpError } = require("../lib/http");
  * Calls next(err) with a 401 HttpError if the token is missing, malformed, or expired.
  */
 function authMiddleware(req, res, next) {
-  const authHeader = req.headers.authorization;
+  const authHeader = String(req.headers.authorization ?? "");
+  const match = authHeader.match(/^Bearer\s+(\S+)$/i);
 
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!match) {
     return next(new HttpError(401, "Access denied. No token provided."));
   }
 
-  const token = authHeader.split(" ")[1];
+  const token = match[1];
 
   try {
     const decoded = verifyToken(token);

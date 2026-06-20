@@ -22,8 +22,17 @@ function ensureCoordinates(req) {
   const latitude = Number(req.query.lat);
   const longitude = Number(req.query.lng);
 
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-    throw new HttpError(400, "Query params lat and lng are required numbers.");
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
+    throw new HttpError(
+      400,
+      "Query param lat must be a valid number between -90 and 90.",
+    );
+  }
+  if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+    throw new HttpError(
+      400,
+      "Query param lng must be a valid number between -180 and 180.",
+    );
   }
 
   return { latitude, longitude };
@@ -56,14 +65,14 @@ function ensureRouteCoordinates(req) {
   const toLongitude = Number(req.query.toLng);
 
   if (
-    !Number.isFinite(fromLatitude) ||
-    !Number.isFinite(fromLongitude) ||
-    !Number.isFinite(toLatitude) ||
-    !Number.isFinite(toLongitude)
+    !isValidLatitude(fromLatitude) ||
+    !isValidLongitude(fromLongitude) ||
+    !isValidLatitude(toLatitude) ||
+    !isValidLongitude(toLongitude)
   ) {
     throw new HttpError(
       400,
-      "Query params fromLat, fromLng, toLat, and toLng are required numbers.",
+      "Route coordinates must be valid latitude/longitude values.",
     );
   }
 
@@ -73,6 +82,14 @@ function ensureRouteCoordinates(req) {
     toLatitude,
     toLongitude,
   };
+}
+
+function isValidLatitude(value) {
+  return Number.isFinite(value) && value >= -90 && value <= 90;
+}
+
+function isValidLongitude(value) {
+  return Number.isFinite(value) && value >= -180 && value <= 180;
 }
 
 /**

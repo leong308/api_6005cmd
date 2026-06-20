@@ -23,10 +23,11 @@ class TripListDataSource {
     final trips = data
         .map((item) => TripListItemModel.fromJson(_asJsonObject(item)))
         .toList();
+    _knownTrips.clear();
     for (final trip in trips) {
       _knownTrips[trip.id] = trip;
     }
-    return _mergeKnownTrips(trips);
+    return trips..sort((a, b) => a.id.compareTo(b.id));
   }
 
   Future<TripListItemModel?> fetchTripById(String id) async {
@@ -41,7 +42,8 @@ class TripListDataSource {
       return trip;
     } on ApiException catch (error) {
       if (error.statusCode == 404) {
-        return _knownTrips[id];
+        _knownTrips.remove(id);
+        return null;
       }
       rethrow;
     }
@@ -78,15 +80,6 @@ class TripListDataSource {
       '/external/reverse-geocode?$query',
     );
     return ReverseGeocodeResult.fromJson(_asJsonObject(response['data']));
-  }
-
-  List<TripListItemModel> _mergeKnownTrips(List<TripListItemModel> apiTrips) {
-    final merged = <String, TripListItemModel>{
-      for (final trip in apiTrips) trip.id: trip,
-      ..._knownTrips,
-    };
-    final trips = merged.values.toList()..sort((a, b) => a.id.compareTo(b.id));
-    return trips;
   }
 }
 

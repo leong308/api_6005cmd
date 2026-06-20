@@ -194,7 +194,26 @@ class _EditTripFormState extends State<_EditTripForm> {
     return null;
   }
 
-  bool get _canSaveChanges => !_isSaving && _dateValidationMessage == null;
+  String? get _formValidationMessage {
+    if (_destinationController.text.trim().isEmpty) {
+      return 'Enter a destination name.';
+    }
+    if (_isLookingUpCountry) {
+      return 'Wait for the country lookup to finish.';
+    }
+    if (_countryController.text.trim().isEmpty) {
+      return 'Pin a location where a destination country can be identified.';
+    }
+    if (!_latitude.isFinite || _latitude < -90 || _latitude > 90) {
+      return 'Select a valid latitude.';
+    }
+    if (!_longitude.isFinite || _longitude < -180 || _longitude > 180) {
+      return 'Select a valid longitude.';
+    }
+    return _dateValidationMessage;
+  }
+
+  bool get _canSaveChanges => !_isSaving && _formValidationMessage == null;
 
   double get _completionScore {
     var filled = 0;
@@ -314,10 +333,10 @@ class _EditTripFormState extends State<_EditTripForm> {
           ),
         ],
       ),
-      if (_dateValidationMessage != null) ...[
+      if (_formValidationMessage != null) ...[
         const SizedBox(height: 6),
         Text(
-          _dateValidationMessage!,
+          _formValidationMessage!,
           style: Theme.of(
             context,
           ).textTheme.bodySmall?.copyWith(color: AppPalette.coral),
@@ -561,11 +580,11 @@ class _EditTripFormState extends State<_EditTripForm> {
   }
 
   Future<void> _saveChanges() async {
-    final dateError = _dateValidationMessage;
-    if (dateError != null) {
+    final validationError = _formValidationMessage;
+    if (validationError != null) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(dateError)));
+      ).showSnackBar(SnackBar(content: Text(validationError)));
       return;
     }
 

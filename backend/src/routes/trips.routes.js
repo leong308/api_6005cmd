@@ -85,7 +85,11 @@ tripRouter.get("/:id/weather", async (req, res, next) => {
       throw new HttpError(404, "Trip not found.");
     }
 
-    const result = await tripWeatherService.fetchCurrentWeatherForTrip(trip);
+    const result = await tripWeatherService.fetchCurrentWeatherForTrip(trip, {
+      forceRefresh: parseBooleanQuery(
+        req.query.refresh ?? req.query.forceRefresh,
+      ),
+    });
 
     return res.json({
       success: true,
@@ -111,7 +115,11 @@ tripRouter.get("/:id/weather/forecast", async (req, res, next) => {
       throw new HttpError(404, "Trip not found.");
     }
 
-    const result = await tripWeatherService.fetchDailyForecastForTrip(trip);
+    const result = await tripWeatherService.fetchDailyForecastForTrip(trip, {
+      forceRefresh: parseBooleanQuery(
+        req.query.refresh ?? req.query.forceRefresh,
+      ),
+    });
 
     return res.json({
       success: true,
@@ -389,6 +397,15 @@ async function resolveTripCountryName(trip) {
 function parseRecommendationLimit(value) {
   const parsed = Number(value);
   return [3, 5, 10].includes(parsed) ? parsed : 5;
+}
+
+/**
+ * Parses the boolean query value into the backend format.
+ */
+function parseBooleanQuery(value) {
+  return ["1", "true", "yes", "force"].includes(
+    String(value ?? "").trim().toLowerCase(),
+  );
 }
 
 /**

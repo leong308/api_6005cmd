@@ -68,7 +68,10 @@ function parsePort(rawPort) {
  */
 function parseOrigins(rawOrigins) {
   if (!rawOrigins || rawOrigins.trim().length === 0) {
-    return true;
+    return String(process.env.NODE_ENV ?? "").trim().toLowerCase() ===
+      "production"
+      ? []
+      : true;
   }
 
   return rawOrigins
