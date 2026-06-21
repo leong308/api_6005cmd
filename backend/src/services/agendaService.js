@@ -74,6 +74,14 @@ const MAX_PARALLEL_FOURSQUARE_REQUESTS = 6;
 const MAX_PARALLEL_ROUTE_DAYS = 2;
 const MAX_PARALLEL_ROUTE_LEGS = 3;
 const WALKING_METERS_PER_SECOND = 1.35;
+const ROUTE_CACHE_TTL_MS = readPositiveNumber(
+  process.env.AGENDA_ROUTE_CACHE_TTL_MS,
+  10 * 60 * 1000,
+);
+const ROUTE_FALLBACK_CACHE_TTL_MS = readPositiveNumber(
+  process.env.AGENDA_ROUTE_FALLBACK_CACHE_TTL_MS,
+  60 * 1000,
+);
 const AGENDA_ROUTE_COLORS = [
   "#2563eb",
   "#f97316",
@@ -95,6 +103,7 @@ async function buildTimedTripAgenda({
   availabilityDays = DEFAULT_AVAILABILITY_DAYS,
   routeMapDays = DEFAULT_ROUTE_MAP_DAYS,
   routeMapDayIndexes = [],
+  forceRefresh = false,
 }) {
   const dates = tripDates(trip.startDate, trip.endDate);
   const forecastByDate = new Map(
@@ -150,6 +159,7 @@ async function buildTimedTripAgenda({
       days,
       routeMapDays,
       routeMapDayIndexes,
+      forceRefresh,
     }),
     checklist: buildChecklist(trip),
   };
@@ -164,6 +174,7 @@ async function buildTripAgenda({
   recommendationGroups,
   routeMapDays = DEFAULT_ROUTE_MAP_DAYS,
   routeMapDayIndexes = [],
+  forceRefresh = false,
 }) {
   const dates = tripDates(trip.startDate, trip.endDate);
   const forecastByDate = new Map(
@@ -207,6 +218,7 @@ async function buildTripAgenda({
       days,
       routeMapDays,
       routeMapDayIndexes,
+      forceRefresh,
     }),
     checklist: buildChecklist(trip),
   };
@@ -305,6 +317,7 @@ async function enrichAgendaDaysWithRouteMaps({
   days,
   routeMapDays,
   routeMapDayIndexes = [],
+  forceRefresh = false,
 }) {
   const routeMapDayLimit = clampRouteMapDays(routeMapDays);
   const explicitRouteDays = new Set(
@@ -333,7 +346,7 @@ async function enrichAgendaDaysWithRouteMaps({
 
       return {
         ...day,
-        routeMap: await buildDayRouteMap({ trip, day }),
+        routeMap: await buildDayRouteMap({ trip, day, forceRefresh }),
       };
     },
   );
@@ -342,13 +355,13 @@ async function enrichAgendaDaysWithRouteMaps({
 /**
  * Builds the day route map payload.
  */
-async function buildDayRouteMap({ trip, day }) {
+async function buildDayRouteMap({ trip, day, forceRefresh = false }) {
   const stops = agendaStopsForDay(trip, day);
   const legSpecs = buildLegSpecs(stops);
   const legs = await mapWithConcurrencyResults(
     legSpecs,
     MAX_PARALLEL_ROUTE_LEGS,
-    fetchAgendaRouteLeg,
+    (spec) => fetchAgendaRouteLeg(spec, { forceRefresh }),
   );
   const totalDistanceMeters = legs.reduce(
     (total, leg) => total + (Number(leg.distanceMeters) || 0),
@@ -478,10 +491,14 @@ function buildLegSpecs(stops) {
 /**
  * Fetches the agenda route leg data.
  */
-async function fetchAgendaRouteLeg(spec) {
+async function fetchAgendaRouteLeg(spec, { forceRefresh = false } = {}) {
   const cacheKey = routeLegCacheKey(spec);
-  if (routeCache.has(cacheKey)) {
-    return routeCache.get(cacheKey);
+  const cached = routeCache.get(cacheKey);
+  if (!forceRefresh && cached && cached.expiresAt > Date.now()) {
+    return cached.leg;
+  }
+  if (cached) {
+    routeCache.delete(cacheKey);
   }
 
   try {
@@ -512,16 +529,23 @@ async function fetchAgendaRouteLeg(spec) {
         0,
       path: route.path,
     };
-    routeCache.set(cacheKey, leg);
+    rememberRouteLeg(cacheKey, leg, ROUTE_CACHE_TTL_MS);
     return leg;
   } catch (error) {
     console.error(
       `Agenda route leg failed (${spec.from.title} -> ${spec.to.title}): ${error.message}`,
     );
     const leg = buildFallbackRouteLeg(spec, error.message);
-    routeCache.set(cacheKey, leg);
+    rememberRouteLeg(cacheKey, leg, ROUTE_FALLBACK_CACHE_TTL_MS);
     return leg;
   }
+}
+
+function rememberRouteLeg(cacheKey, leg, ttlMs) {
+  routeCache.set(cacheKey, {
+    leg,
+    expiresAt: Date.now() + ttlMs,
+  });
 }
 
 /**
@@ -918,6 +942,11 @@ function buildChecklist(trip) {
     "Keep one flexible backup slot per day.",
     "Re-check opening hours on the travel day in case venues change schedules.",
   ];
+}
+
+function readPositiveNumber(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 module.exports = {

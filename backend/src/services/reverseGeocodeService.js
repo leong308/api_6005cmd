@@ -13,6 +13,18 @@ const NOMINATIM_URL = "https://nominatim.openstreetmap.org/reverse";
 const USER_AGENT =
   process.env.NOMINATIM_USER_AGENT || "SmartTravelPlanner/1.0 (local-development)";
 const MIN_REQUEST_INTERVAL_MS = 1100;
+const NOMINATIM_TIMEOUT_MS = readPositiveNumber(
+  process.env.NOMINATIM_TIMEOUT_MS,
+  10000,
+);
+const CACHE_TTL_MS = readPositiveNumber(
+  process.env.REVERSE_GEOCODE_CACHE_TTL_MS,
+  24 * 60 * 60 * 1000,
+);
+const NEGATIVE_CACHE_TTL_MS = readPositiveNumber(
+  process.env.REVERSE_GEOCODE_NEGATIVE_CACHE_TTL_MS,
+  60 * 1000,
+);
 
 const cache = new Map();
 let nextRequestAt = 0;
@@ -28,11 +40,13 @@ function cacheKey(latitude, longitude) {
  * Supports the wait for rate limit backend flow.
  */
 async function waitForRateLimit() {
-  const delay = nextRequestAt - Date.now();
+  const now = Date.now();
+  const scheduledAt = Math.max(now, nextRequestAt);
+  nextRequestAt = scheduledAt + MIN_REQUEST_INTERVAL_MS;
+  const delay = scheduledAt - now;
   if (delay > 0) {
     await new Promise((resolve) => setTimeout(resolve, delay));
   }
-  nextRequestAt = Date.now() + MIN_REQUEST_INTERVAL_MS;
 }
 
 /**
@@ -53,8 +67,12 @@ async function reverseGeocode(latitude, longitude) {
   }
 
   const key = cacheKey(latitude, longitude);
-  if (cache.has(key)) {
-    return cache.get(key);
+  const cached = cache.get(key);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.data;
+  }
+  if (cached) {
+    cache.delete(key);
   }
 
   try {
@@ -71,7 +89,7 @@ async function reverseGeocode(latitude, longitude) {
       normalizedGeoapifyResult.country.length > 0 ||
       normalizedGeoapifyResult.countryCode.length > 0
     ) {
-      cache.set(key, normalizedGeoapifyResult);
+      rememberResult(key, normalizedGeoapifyResult, CACHE_TTL_MS);
       return normalizedGeoapifyResult;
     }
     console.warn("Geoapify country lookup returned no country.");
@@ -84,7 +102,7 @@ async function reverseGeocode(latitude, longitude) {
       latitude,
       longitude,
     );
-    cache.set(key, nominatimResult);
+    rememberResult(key, nominatimResult, CACHE_TTL_MS);
     return nominatimResult;
   } catch (error) {
     console.warn(`Nominatim country lookup failed: ${error.message}`);
@@ -97,7 +115,7 @@ async function reverseGeocode(latitude, longitude) {
       source: "unavailable",
       warning: "Country lookup is temporarily unavailable.",
     };
-    cache.set(key, unavailableResult);
+    rememberResult(key, unavailableResult, NEGATIVE_CACHE_TTL_MS);
     return unavailableResult;
   }
 }
@@ -122,6 +140,7 @@ async function reverseGeocodeWithNominatim(latitude, longitude) {
       "User-Agent": USER_AGENT,
       Referer: "http://localhost:3000",
     },
+    signal: AbortSignal.timeout(NOMINATIM_TIMEOUT_MS),
   });
 
   if (!response.ok) {
@@ -145,6 +164,18 @@ async function reverseGeocodeWithNominatim(latitude, longitude) {
     longitude,
     source: "nominatim",
   });
+}
+
+function rememberResult(key, data, ttlMs) {
+  cache.set(key, {
+    data,
+    expiresAt: Date.now() + ttlMs,
+  });
+}
+
+function readPositiveNumber(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 /**

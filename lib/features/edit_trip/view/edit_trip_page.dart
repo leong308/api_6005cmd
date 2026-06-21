@@ -706,7 +706,7 @@ class _EditReadiness extends StatelessWidget {
   const _EditReadiness({required this.score, required this.updatedAt});
 
   final double score;
-  final DateTime updatedAt;
+  final DateTime? updatedAt;
 
   @override
   Widget build(BuildContext context) {
@@ -745,7 +745,9 @@ class _EditReadiness extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Last synced: ${updatedAt.toIso8601String()}',
+                  updatedAt == null
+                      ? 'Last updated time unavailable'
+                      : 'Last updated: ${updatedAt!.toIso8601String()}',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: AppPalette.inkA(0.64),
                   ),

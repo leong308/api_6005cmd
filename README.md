@@ -24,6 +24,8 @@ mobile.
 
 ## Run Express Backend
 
+Requires Node.js 20.19.0 or newer.
+
 ```bash
 cd backend
 npm install

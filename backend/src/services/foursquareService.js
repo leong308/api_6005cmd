@@ -426,13 +426,14 @@ function clampLimit(value) {
  * Supports the remember recommendations backend flow.
  */
 async function rememberRecommendations(key, data) {
+  const ttlMs = data.length > 0 ? CACHE_TTL_MS : NEGATIVE_CACHE_TTL_MS;
   cache.set(key, {
     data,
-    expiresAt: Date.now() + CACHE_TTL_MS,
+    expiresAt: Date.now() + ttlMs,
   });
 
   await cacheRepository.setCachedValue("recommendations", key, data, {
-    ttlMs: data.length > 0 ? undefined : NEGATIVE_CACHE_TTL_MS,
+    ttlMs,
     metadata: {
       provider: data[0]?.source ?? "empty",
       resultCount: data.length,

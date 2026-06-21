@@ -7,10 +7,12 @@
 const localStore = require("./store");
 const cacheRepository = require("./cacheRepository");
 const { getDb, isMongoConfigured } = require("../db/mongo");
+const { HttpError } = require("../lib/http");
 const { normalizeTripPayload } = require("../lib/tripValidation");
 
 const TRIPS_COLLECTION = "trips";
 const USERS_COLLECTION = "users";
+const ID_INSERT_ATTEMPTS = 4;
 
 /**
  * Lists the trips data.
@@ -60,15 +62,17 @@ async function createTrip(payload, ownerUserId = null) {
 
   const collection = await tripsCollection();
   const now = new Date().toISOString();
-  const created = {
-    ...normalizedPayload,
-    id: await generateTripId(collection),
-    ownerUserId: ownerUserId ? String(ownerUserId) : null,
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  await collection.insertOne(created);
+  const created = await insertWithGeneratedId({
+    collection,
+    generateId: generateTripId,
+    buildDocument: (id) => ({
+      ...normalizedPayload,
+      id,
+      ownerUserId: ownerUserId ? String(ownerUserId) : null,
+      createdAt: now,
+      updatedAt: now,
+    }),
+  });
   return toPublicTrip(created);
 }
 
@@ -212,26 +216,41 @@ async function createUser(payload) {
 
   const collection = await usersCollection();
   const now = new Date().toISOString();
-  const created = {
-    id: await generateUserId(collection),
-    name: String(payload.name).trim(),
-    email: normalizeEmail(payload.email),
-    password: String(payload.password),
-    emailVerified: Boolean(payload.emailVerified),
-    emailVerifiedAt: payload.emailVerifiedAt ?? null,
-    emailVerificationProvider: payload.emailVerificationProvider ?? "email",
-    firebaseLocalId: payload.firebaseLocalId ?? null,
-    emailVerificationTokenHash: payload.emailVerificationTokenHash ?? null,
-    emailVerificationExpiresAt: payload.emailVerificationExpiresAt ?? null,
-    passwordResetTokenHash: payload.passwordResetTokenHash ?? null,
-    passwordResetExpiresAt: payload.passwordResetExpiresAt ?? null,
-    firstLogin:
-      payload.firstLogin !== undefined ? Boolean(payload.firstLogin) : true,
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  await collection.insertOne(created);
+  let created;
+  try {
+    created = await insertWithGeneratedId({
+      collection,
+      generateId: generateUserId,
+      buildDocument: (id) => ({
+        id,
+        name: String(payload.name).trim(),
+        email: normalizeEmail(payload.email),
+        password: String(payload.password),
+        emailVerified: Boolean(payload.emailVerified),
+        emailVerifiedAt: payload.emailVerifiedAt ?? null,
+        emailVerificationProvider:
+          payload.emailVerificationProvider ?? "email",
+        firebaseLocalId: payload.firebaseLocalId ?? null,
+        emailVerificationTokenHash:
+          payload.emailVerificationTokenHash ?? null,
+        emailVerificationExpiresAt:
+          payload.emailVerificationExpiresAt ?? null,
+        passwordResetTokenHash: payload.passwordResetTokenHash ?? null,
+        passwordResetExpiresAt: payload.passwordResetExpiresAt ?? null,
+        firstLogin:
+          payload.firstLogin !== undefined
+            ? Boolean(payload.firstLogin)
+            : true,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    });
+  } catch (error) {
+    if (isDuplicateKeyFor(error, "email")) {
+      throw new HttpError(409, "Email already exists.");
+    }
+    throw error;
+  }
   return toUser(created);
 }
 
@@ -471,6 +490,41 @@ async function generateUserId(collection) {
     return Number.isNaN(value) ? max : Math.max(max, value);
   }, 0);
   return `user_${String(maxNumber + 1).padStart(3, "0")}`;
+}
+
+/**
+ * Retries sequential public-ID generation when concurrent inserts collide.
+ */
+async function insertWithGeneratedId({
+  collection,
+  generateId,
+  buildDocument,
+}) {
+  for (let attempt = 1; attempt <= ID_INSERT_ATTEMPTS; attempt += 1) {
+    const document = buildDocument(await generateId(collection));
+    try {
+      await collection.insertOne(document);
+      return document;
+    } catch (error) {
+      if (
+        !isDuplicateKeyFor(error, "id") ||
+        attempt === ID_INSERT_ATTEMPTS
+      ) {
+        throw error;
+      }
+    }
+  }
+  throw new Error("Could not allocate a unique public ID.");
+}
+
+function isDuplicateKeyFor(error, fieldName) {
+  if (Number(error?.code) !== 11000) {
+    return false;
+  }
+  if (error.keyPattern && Object.hasOwn(error.keyPattern, fieldName)) {
+    return true;
+  }
+  return String(error.message ?? "").includes(`${fieldName}_1`);
 }
 
 /**

@@ -273,23 +273,41 @@ function parseDurationSeconds(value) {
  * Decodes the polyline value.
  */
 function decodePolyline(encoded) {
+  if (typeof encoded !== "string" || encoded.length === 0) {
+    return [];
+  }
   const points = [];
   let index = 0;
   let latitude = 0;
   let longitude = 0;
 
   while (index < encoded.length) {
-    const latitudeDelta = decodePolylineValue(encoded, () => index++);
+    const latitudeDelta = decodePolylineValue(encoded, index);
     index = latitudeDelta.nextIndex;
     latitude += latitudeDelta.value;
 
-    const longitudeDelta = decodePolylineValue(encoded, () => index++);
+    const longitudeDelta = decodePolylineValue(encoded, index);
     index = longitudeDelta.nextIndex;
     longitude += longitudeDelta.value;
 
+    const decodedLatitude = latitude / 100000;
+    const decodedLongitude = longitude / 100000;
+    if (
+      !Number.isFinite(decodedLatitude) ||
+      decodedLatitude < -90 ||
+      decodedLatitude > 90 ||
+      !Number.isFinite(decodedLongitude) ||
+      decodedLongitude < -180 ||
+      decodedLongitude > 180
+    ) {
+      throw new HttpError(
+        502,
+        "Google Routes API returned a malformed route path.",
+      );
+    }
     points.push({
-      latitude: latitude / 100000,
-      longitude: longitude / 100000,
+      latitude: decodedLatitude,
+      longitude: decodedLongitude,
     });
   }
 
@@ -299,27 +317,43 @@ function decodePolyline(encoded) {
 /**
  * Decodes the polyline value value.
  */
-function decodePolylineValue(encoded, nextIndex) {
+function decodePolylineValue(encoded, startIndex) {
   let result = 0;
   let shift = 0;
-  let byte = null;
-  let currentIndex = null;
+  let currentIndex = startIndex;
 
-  do {
-    currentIndex = nextIndex();
-    byte = encoded.charCodeAt(currentIndex) - 63;
+  while (true) {
+    if (currentIndex >= encoded.length || shift > 30) {
+      throw new HttpError(
+        502,
+        "Google Routes API returned a truncated route path.",
+      );
+    }
+    const characterCode = encoded.charCodeAt(currentIndex);
+    if (characterCode < 63 || characterCode > 126) {
+      throw new HttpError(
+        502,
+        "Google Routes API returned an invalid route path.",
+      );
+    }
+    const byte = characterCode - 63;
     result |= (byte & 0x1f) << shift;
     shift += 5;
-  } while (byte >= 0x20);
+    currentIndex += 1;
+    if (byte < 0x20) {
+      break;
+    }
+  }
 
   const value = (result & 1) !== 0 ? ~(result >> 1) : result >> 1;
   return {
     value,
-    nextIndex: currentIndex + 1,
+    nextIndex: currentIndex,
   };
 }
 
 module.exports = {
+  decodePolyline,
   fetchRoute,
   fetchWalkingRoute,
 };

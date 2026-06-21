@@ -9,6 +9,8 @@ class TripListItemModel {
     required this.endDate,
     required this.preferences,
     required this.travelNotes,
+    this.createdAt,
+    this.updatedAt,
   });
 
   final String id;
@@ -20,8 +22,29 @@ class TripListItemModel {
   final DateTime endDate;
   final List<String> preferences;
   final String travelNotes;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   factory TripListItemModel.fromJson(Map<String, dynamic> json) {
+    final latitude = _asDouble(json['latitude'], 'latitude');
+    final longitude = _asDouble(json['longitude'], 'longitude');
+    final startDate = _asDate(json['startDate'], 'startDate');
+    final endDate = _asDate(json['endDate'], 'endDate');
+    if (latitude < -90 || latitude > 90) {
+      throw const FormatException(
+        'Trip field "latitude" is outside the valid range.',
+      );
+    }
+    if (longitude < -180 || longitude > 180) {
+      throw const FormatException(
+        'Trip field "longitude" is outside the valid range.',
+      );
+    }
+    if (endDate.isBefore(startDate)) {
+      throw const FormatException(
+        'Trip field "endDate" is earlier than "startDate".',
+      );
+    }
     return TripListItemModel(
       id: _asRequiredString(json['id'], 'id'),
       destinationName: _asRequiredString(
@@ -32,12 +55,14 @@ class TripListItemModel {
         json['destinationCountry'],
         'destinationCountry',
       ),
-      latitude: _asDouble(json['latitude'], 'latitude'),
-      longitude: _asDouble(json['longitude'], 'longitude'),
-      startDate: _asDate(json['startDate'], 'startDate'),
-      endDate: _asDate(json['endDate'], 'endDate'),
+      latitude: latitude,
+      longitude: longitude,
+      startDate: startDate,
+      endDate: endDate,
       preferences: _asStringList(json['preferences']),
       travelNotes: _asString(json['travelNotes']),
+      createdAt: _asNullableDate(json['createdAt'], 'createdAt'),
+      updatedAt: _asNullableDate(json['updatedAt'], 'updatedAt'),
     );
   }
 
@@ -57,6 +82,8 @@ class TripListItemModel {
       'endDate': endDate.toIso8601String().split('T').first,
       'preferences': preferences,
       'travelNotes': travelNotes,
+      if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
+      if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
     };
   }
 
@@ -85,7 +112,21 @@ class TripListItemModel {
   }
 
   static DateTime _asDate(Object? value, String fieldName) {
-    final parsed = DateTime.tryParse(value?.toString() ?? '');
+    final text = value?.toString() ?? '';
+    final parsed = DateTime.tryParse(text);
+    if (parsed == null ||
+        !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(text) ||
+        parsed.toIso8601String().split('T').first != text) {
+      throw FormatException('Trip field "$fieldName" is not a valid date.');
+    }
+    return parsed;
+  }
+
+  static DateTime? _asNullableDate(Object? value, String fieldName) {
+    if (value == null || value.toString().trim().isEmpty) {
+      return null;
+    }
+    final parsed = DateTime.tryParse(value.toString());
     if (parsed == null) {
       throw FormatException('Trip field "$fieldName" is not a valid date.');
     }

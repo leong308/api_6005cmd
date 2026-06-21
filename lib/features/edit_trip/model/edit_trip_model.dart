@@ -9,7 +9,7 @@ class EditTripModel {
     required this.endDate,
     required this.preferences,
     required this.travelNotes,
-    required this.updatedAt,
+    this.updatedAt,
   });
 
   final String id;
@@ -21,7 +21,7 @@ class EditTripModel {
   final DateTime endDate;
   final List<String> preferences;
   final String travelNotes;
-  final DateTime updatedAt;
+  final DateTime? updatedAt;
 
   Map<String, dynamic> toJson() {
     return {
@@ -34,7 +34,6 @@ class EditTripModel {
       'endDate': endDate.toIso8601String().split('T').first,
       'preferences': preferences,
       'travelNotes': travelNotes,
-      'updatedAt': updatedAt.toIso8601String(),
     };
   }
 }

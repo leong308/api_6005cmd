@@ -7,6 +7,7 @@
  */
 const express = require("express");
 const { HttpError } = require("../lib/http");
+const { authMiddleware } = require("../middleware/authMiddleware");
 const countryService = require("../services/countryService");
 const foursquareService = require("../services/foursquareService");
 const reverseGeocodeService = require("../services/reverseGeocodeService");
@@ -14,6 +15,10 @@ const routeService = require("../services/routeService");
 const weatherService = require("../services/weatherService");
 
 const externalRouter = express.Router();
+
+// Provider proxy routes can consume paid quotas, so require the same JWT used
+// by the authenticated Flutter workspace.
+externalRouter.use(authMiddleware);
 
 /**
  * Ensures the coordinates input is valid.

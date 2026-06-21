@@ -51,6 +51,41 @@ void main() {
     await dataSource.fetchTrips();
     expect(await dataSource.fetchTripById('trip_001'), isNull);
   });
+
+  test('rejects malformed reverse-geocode coordinates', () async {
+    final client = ApiClient(
+      baseUrl: 'https://example.test/api',
+      httpClient: MockClient(
+        (_) async => http.Response(
+          jsonEncode({
+            'data': {
+              'country': 'Malaysia',
+              'countryCode': 'MY',
+              'displayName': 'Malaysia',
+              'latitude': 'not-a-number',
+              'longitude': 101.9758,
+            },
+          }),
+          200,
+        ),
+      ),
+    );
+    addTearDown(client.close);
+    final dataSource = TripListDataSource(apiClient: client);
+
+    await expectLater(
+      dataSource.reverseGeocode(latitude: 4.2105, longitude: 101.9758),
+      throwsA(
+        isA<ApiException>()
+            .having((error) => error.statusCode, 'statusCode', 502)
+            .having(
+              (error) => error.message,
+              'message',
+              contains('invalid latitude'),
+            ),
+      ),
+    );
+  });
 }
 
 const Map<String, Object> _tripJson = {

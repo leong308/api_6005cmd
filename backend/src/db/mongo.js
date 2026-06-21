@@ -31,7 +31,11 @@ async function getDb() {
   }
 
   if (!dbPromise) {
-    dbPromise = connect();
+    dbPromise = connect().catch((error) => {
+      dbPromise = null;
+      indexesPromise = null;
+      throw error;
+    });
   }
 
   return dbPromise;
@@ -54,7 +58,14 @@ async function getClient() {
   if (!clientPromise) {
     clientPromise = new MongoClient(readMongoUri(), {
       serverSelectionTimeoutMS: SERVER_SELECTION_TIMEOUT_MS,
-    }).connect();
+    })
+      .connect()
+      .catch((error) => {
+        clientPromise = null;
+        dbPromise = null;
+        indexesPromise = null;
+        throw error;
+      });
   }
 
   return clientPromise;

@@ -599,6 +599,9 @@ class _AuthGateState extends State<_AuthGate> {
       if (token.isEmpty) {
         throw const ApiException(500, 'Login did not return a token.');
       }
+      if (!mounted) {
+        return;
+      }
       widget.onAuthenticated(_AuthenticatedUser.fromJson(data), token);
     });
   }
@@ -611,6 +614,9 @@ class _AuthGateState extends State<_AuthGate> {
         'password': _passwordController.text,
       });
       final emailVerification = _asMap(response['emailVerification']);
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _message =
             response['message']?.toString() ??
@@ -629,6 +635,9 @@ class _AuthGateState extends State<_AuthGate> {
         {'email': _emailController.text.trim()},
       );
       final passwordReset = _asMap(response['passwordReset']);
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _message =
             response['message']?.toString() ??
@@ -639,6 +648,9 @@ class _AuthGateState extends State<_AuthGate> {
   }
 
   Future<void> _runAuthAction(Future<void> Function() action) async {
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _busy = true;
       _message = '';
@@ -647,13 +659,17 @@ class _AuthGateState extends State<_AuthGate> {
     try {
       await action();
     } on ApiException catch (error) {
-      setState(() {
-        _message = error.message;
-      });
+      if (mounted) {
+        setState(() {
+          _message = error.message;
+        });
+      }
     } catch (error) {
-      setState(() {
-        _message = error.toString();
-      });
+      if (mounted) {
+        setState(() {
+          _message = error.toString();
+        });
+      }
     } finally {
       if (mounted) {
         setState(() {

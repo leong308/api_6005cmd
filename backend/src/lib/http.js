@@ -17,6 +17,7 @@ class HttpError extends Error {
  * Asserts that the required fields input is valid.
  */
 function assertRequiredFields(payload, requiredFields) {
+  assertJsonObject(payload);
   const missing = [];
   for (const field of requiredFields) {
     if (
@@ -36,6 +37,7 @@ function assertRequiredFields(payload, requiredFields) {
  * Asserts that the provided fields not empty input is valid.
  */
 function assertProvidedFieldsNotEmpty(payload, fields) {
+  assertJsonObject(payload);
   const empty = [];
   for (const field of fields) {
     if (
@@ -52,6 +54,15 @@ function assertProvidedFieldsNotEmpty(payload, fields) {
 }
 
 /**
+ * Rejects null, arrays, and primitive request bodies before field validation.
+ */
+function assertJsonObject(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new HttpError(400, "Request body must be a JSON object.");
+  }
+}
+
+/**
  * Checks whether blank value is true.
  */
 function isBlankValue(value) {
@@ -64,6 +75,7 @@ function isBlankValue(value) {
 
 module.exports = {
   HttpError,
+  assertJsonObject,
   assertProvidedFieldsNotEmpty,
   assertRequiredFields,
 };

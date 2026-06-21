@@ -45,7 +45,7 @@ class EditTripDataSource {
       endDate: trip.endDate,
       preferences: trip.preferences,
       travelNotes: trip.travelNotes,
-      updatedAt: DateTime.now(),
+      updatedAt: trip.updatedAt,
     );
   }
 }

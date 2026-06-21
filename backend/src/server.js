@@ -24,7 +24,7 @@ app.use(globalErrorHandler);
 /**
  * Starts the HTTP server on the configured port.
  */
-app.listen(process.env.PORT || env.port, () => {
+app.listen(env.port, () => {
   console.log(`Smart Travel Planner API running`);
 });
 

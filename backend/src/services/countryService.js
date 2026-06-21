@@ -5,6 +5,10 @@
  * smaller country detail shape used by the trip summary and country endpoints.
  */
 const { HttpError } = require("../lib/http");
+const COUNTRY_PROVIDER_TIMEOUT_MS = readPositiveNumber(
+  process.env.COUNTRY_PROVIDER_TIMEOUT_MS,
+  10000,
+);
 
 /**
  * Fetches country information from the REST Countries API.
@@ -51,7 +55,7 @@ async function fetchCountryDataByCode(countryCode) {
   const url = `https://restcountries.com/v3.1/alpha/${encodeURIComponent(normalizedCode)}`;
 
   try {
-    const response = await fetch(url);
+    const response = await fetchCountryResponse(url);
     if (!response.ok) {
       if (response.status === 404) {
         throw new HttpError(404, `Country code '${normalizedCode}' not found.`);
@@ -62,7 +66,7 @@ async function fetchCountryDataByCode(countryCode) {
       );
     }
 
-    const data = await response.json();
+    const data = await readCountryJson(response);
     if (!Array.isArray(data) || data.length === 0) {
       throw new HttpError(404, `Country code '${normalizedCode}' not found.`);
     }
@@ -72,7 +76,7 @@ async function fetchCountryDataByCode(countryCode) {
     if (error instanceof HttpError) {
       throw error;
     }
-    throw new HttpError(500, `Failed to fetch country data: ${error.message}`);
+    throw new HttpError(502, `Failed to fetch country data: ${error.message}`);
   }
 }
 
@@ -118,7 +122,7 @@ function mapRestCountry(country, fallbackName) {
  * Fetches the rest country data.
  */
 async function fetchRestCountry(url) {
-  const response = await fetch(url);
+  const response = await fetchCountryResponse(url);
   if (!response.ok) {
     if (response.status === 404) {
       throw new HttpError(404, "Country not found.");
@@ -129,11 +133,37 @@ async function fetchRestCountry(url) {
     );
   }
 
-  const data = await response.json();
+  const data = await readCountryJson(response);
   if (!Array.isArray(data) || data.length === 0) {
     throw new HttpError(404, "Country not found.");
   }
   return data[0];
+}
+
+async function fetchCountryResponse(url) {
+  try {
+    return await fetch(url, {
+      signal: AbortSignal.timeout(COUNTRY_PROVIDER_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (error?.name === "TimeoutError" || error?.name === "AbortError") {
+      throw new HttpError(504, "Country provider request timed out.");
+    }
+    throw new HttpError(502, `Country provider request failed: ${error.message}`);
+  }
+}
+
+async function readCountryJson(response) {
+  try {
+    return await response.json();
+  } catch (_error) {
+    throw new HttpError(502, "Country provider returned malformed JSON.");
+  }
+}
+
+function readPositiveNumber(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 /**

@@ -81,18 +81,24 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
     }
   }
 
-  Future<TripSummaryModel?> _fetchSummary() {
+  Future<TripSummaryModel?> _fetchSummary({bool forceRefresh = false}) {
     return widget.dataSource.fetchSummary(
       widget.tripId,
       recommendationLimits: Map.unmodifiable(_recommendationLimits),
       routeMapDayIndexes: Set.unmodifiable(_routeMapDayIndexes),
+      forceRefresh: forceRefresh,
     );
   }
 
-  void _refreshMock() {
+  void _retrySummary() {
     setState(() {
-      _routeMapDayIndexes.clear();
       _summaryFuture = _fetchSummary();
+    });
+  }
+
+  void _refreshExternalData() {
+    setState(() {
+      _summaryFuture = _fetchSummary(forceRefresh: true);
     });
   }
 
@@ -125,7 +131,7 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
         if (snapshot.hasError) {
           return _SummaryError(
             message: snapshot.error.toString(),
-            onRetry: _refreshMock,
+            onRetry: _retrySummary,
           );
         }
 
@@ -149,7 +155,7 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
             SectionHeader(
               title: 'Trip Details / Smart Travel Summary',
               trailing: FilledButton.tonalIcon(
-                onPressed: _refreshMock,
+                onPressed: _refreshExternalData,
                 icon: const Icon(Icons.sync_rounded),
                 label: const Text('Refresh External Data'),
               ),

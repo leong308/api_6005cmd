@@ -38,6 +38,10 @@ const REQUIRED_TRIP_FIELDS = [
   "endDate",
 ];
 const AGENDA_CACHE_VERSION = "no-placeholder-v2";
+const AGENDA_CACHE_TTL_MS = readPositiveNumber(
+  process.env.TRIP_AGENDA_CACHE_TTL_MS,
+  10 * 60 * 1000,
+);
 
 tripRouter.use(authMiddleware);
 
@@ -211,6 +215,9 @@ tripRouter.get("/:id/agenda", async (req, res, next) => {
     const routeMapDayIndexes = parseRouteMapDayIndexes(
       req.query.routeMapDayIndexes,
     );
+    const forceRefresh = parseBooleanQuery(
+      req.query.refresh ?? req.query.forceRefresh,
+    );
     const cacheKey = buildTripCacheKey(trip, "agenda", {
       agendaCacheVersion: AGENDA_CACHE_VERSION,
       availabilityDays,
@@ -219,7 +226,9 @@ tripRouter.get("/:id/agenda", async (req, res, next) => {
       routeMapDayIndexes,
       routeMapDays,
     });
-    const cached = await cacheRepository.getCachedValue("trip_agenda", cacheKey);
+    const cached = forceRefresh
+      ? undefined
+      : await cacheRepository.getCachedValue("trip_agenda", cacheKey);
     if (cached !== undefined) {
       return res.json({
         success: true,
@@ -232,7 +241,7 @@ tripRouter.get("/:id/agenda", async (req, res, next) => {
 
     const [dailyWeatherForecast, recommendationGroups] = await Promise.all([
       tripWeatherService
-        .fetchDailyForecastForTrip(trip)
+        .fetchDailyForecastForTrip(trip, { forceRefresh })
         .then((result) => result.data)
         .catch(() => null),
       foursquareService
@@ -242,6 +251,7 @@ tripRouter.get("/:id/agenda", async (req, res, next) => {
           preferences: trip.preferences,
           limit,
           limitsByPreference,
+          forceRefresh,
         })
         .catch(() => []),
     ]);
@@ -253,9 +263,11 @@ tripRouter.get("/:id/agenda", async (req, res, next) => {
       availabilityDays,
       routeMapDays,
       routeMapDayIndexes,
+      forceRefresh,
     });
     await cacheRepository.setCachedValue("trip_agenda", cacheKey, data, {
       metadata: { tripId: trip.id, provider: "smart-travel-planner" },
+      ttlMs: AGENDA_CACHE_TTL_MS,
     });
 
     return res.json({
@@ -498,4 +510,9 @@ function stableStringify(value) {
       .join(",")}}`;
   }
   return JSON.stringify(value);
+}
+
+function readPositiveNumber(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }

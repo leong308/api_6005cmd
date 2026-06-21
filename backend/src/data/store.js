@@ -149,6 +149,7 @@ function getTripById(id) {
  * Creates the trip data.
  */
 function createTrip(payload) {
+  const now = new Date().toISOString();
   const created = {
     id: generateTripId(),
     ownerUserId: payload.ownerUserId ? String(payload.ownerUserId) : null,
@@ -162,6 +163,8 @@ function createTrip(payload) {
       ? payload.preferences.map((value) => String(value))
       : [],
     travelNotes: String(payload.travelNotes ?? ""),
+    createdAt: now,
+    updatedAt: now,
   };
 
   trips.push(created);
@@ -180,6 +183,7 @@ function updateTrip(id, payload) {
   }
 
   const current = trips[index];
+  const now = new Date().toISOString();
   const updated = {
     ...current,
     ownerUserId:
@@ -208,6 +212,8 @@ function updateTrip(id, payload) {
       payload.travelNotes !== undefined
         ? String(payload.travelNotes)
         : current.travelNotes,
+    createdAt: current.createdAt ?? now,
+    updatedAt: now,
   };
 
   trips[index] = updated;
@@ -457,7 +463,7 @@ function markUserAppTourCompleted(userId) {
 function createUser(payload) {
   const now = new Date().toISOString();
   const created = {
-    id: `user_${String(users.length + 1).padStart(3, "0")}`,
+    id: generateUserId(),
     name: String(payload.name).trim(),
     email: String(payload.email).trim().toLowerCase(),
     password: String(payload.password),
@@ -480,6 +486,20 @@ function createUser(payload) {
     name: created.name,
     email: created.email,
   };
+}
+
+/**
+ * Generates a user ID without reusing an existing numeric ID after cleanup.
+ */
+function generateUserId() {
+  const maxNumber = users.reduce((max, user) => {
+    const match = String(user.id ?? "").match(/^user_(\d+)$/);
+    if (!match) {
+      return max;
+    }
+    return Math.max(max, Number(match[1]));
+  }, 0);
+  return `user_${String(maxNumber + 1).padStart(3, "0")}`;
 }
 
 /**

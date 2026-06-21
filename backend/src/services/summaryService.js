@@ -15,6 +15,10 @@ const tripWeatherService = require("./tripWeatherService");
 const { HttpError } = require("../lib/http");
 
 const AGENDA_CACHE_VERSION = "no-placeholder-v2";
+const SUMMARY_CACHE_TTL_MS = readPositiveNumber(
+  process.env.TRIP_SUMMARY_CACHE_TTL_MS,
+  10 * 60 * 1000,
+);
 
 /**
  * Orchestrates external API calls asynchronously for a specific trip.
@@ -160,6 +164,7 @@ async function generateSummary(tripId, options = {}) {
       availabilityDays: options.availabilityDays,
       routeMapDays: options.routeMapDays,
       routeMapDayIndexes: options.routeMapDayIndexes,
+      forceRefresh: options.forceRefresh,
     });
   } catch (err) {
     console.error(`Graceful partial failure: Timed agenda failed - ${err.message}`);
@@ -170,6 +175,7 @@ async function generateSummary(tripId, options = {}) {
       availabilityDays: options.availabilityDays,
       routeMapDays: options.routeMapDays,
       routeMapDayIndexes: options.routeMapDayIndexes,
+      forceRefresh: options.forceRefresh,
     });
   }
 
@@ -190,6 +196,7 @@ async function generateSummary(tripId, options = {}) {
   };
   await cacheRepository.setCachedValue("trip_summary", cacheKey, summary, {
     metadata: { tripId },
+    ttlMs: SUMMARY_CACHE_TTL_MS,
   });
   return summary;
 }
@@ -279,4 +286,9 @@ function stableStringify(value) {
       .join(",")}}`;
   }
   return JSON.stringify(value);
+}
+
+function readPositiveNumber(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }

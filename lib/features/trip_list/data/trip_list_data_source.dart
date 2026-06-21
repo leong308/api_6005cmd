@@ -103,8 +103,8 @@ class ReverseGeocodeResult {
       country: json['country']?.toString() ?? '',
       countryCode: json['countryCode']?.toString() ?? '',
       displayName: json['displayName']?.toString() ?? '',
-      latitude: _asDouble(json['latitude']),
-      longitude: _asDouble(json['longitude']),
+      latitude: _asCoordinate(json['latitude'], 'latitude', -90, 90),
+      longitude: _asCoordinate(json['longitude'], 'longitude', -180, 180),
     );
   }
 }
@@ -119,9 +119,26 @@ Map<String, dynamic> _asJsonObject(Object? value) {
   throw const ApiException(500, 'API response did not include an object.');
 }
 
-double _asDouble(Object? value) {
+double _asCoordinate(
+  Object? value,
+  String fieldName,
+  double minimum,
+  double maximum,
+) {
+  double? parsed;
   if (value is num) {
-    return value.toDouble();
+    parsed = value.toDouble();
+  } else {
+    parsed = double.tryParse(value?.toString() ?? '');
   }
-  return double.tryParse(value?.toString() ?? '') ?? 0;
+  if (parsed == null ||
+      !parsed.isFinite ||
+      parsed < minimum ||
+      parsed > maximum) {
+    throw ApiException(
+      502,
+      'Reverse-geocode response included an invalid $fieldName.',
+    );
+  }
+  return parsed;
 }

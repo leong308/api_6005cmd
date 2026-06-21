@@ -8,7 +8,10 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('Smart Travel Planner'), findsWidgets);
     expect(find.text('Login'), findsWidgets);
+    expect(
+      find.text('Use your verified email account to continue.'),
+      findsOneWidget,
+    );
   });
 }

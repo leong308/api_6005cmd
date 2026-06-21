@@ -4,6 +4,8 @@ This folder contains an Express.js backend for your Flutter web app.
 
 ## Quick Start
 
+Requires Node.js 20.19.0 or newer.
+
 1. Install dependencies:
 
 ```bash
@@ -128,7 +130,7 @@ web API key is in Firebase Console → Project settings → General → Web API 
 - MongoDB collections used by the backend are `trips`, `users`, and `api_cache`.
 - Users are stored in the `users` collection. Trips are stored in the `trips` collection with `ownerUserId`, so each logged-in account only sees its own trips and summaries.
 - Trip summaries, country lookups, agenda responses, and recommendation lookups read cache before provider calls. Trip weather/current forecast data also writes one JSON cache file per trip under `backend/.data/weather-cache`.
-- Auth uses bcrypt password hashes, email verification, and JWT bearer tokens. Register first, open the verification link, then log in. Send the returned token as `Authorization: Bearer <token>` for all `/api/trips/*`, `/api/trips/:id/summary`, and `/api/auth/profile` requests.
+- Auth uses bcrypt password hashes, email verification, and JWT bearer tokens. Register first, open the verification link, then log in. Send the returned token as `Authorization: Bearer <token>` for all `/api/trips/*`, `/api/external/*`, `/api/trips/:id/summary`, and `/api/auth/profile` requests.
 - `JWT_SECRET` must be configured for real deployments. Local development can run without it by using an ephemeral secret, but tokens are invalidated whenever the backend restarts. In production, the API still starts when the secret is missing or weak, but authentication endpoints return a setup error until `JWT_SECRET` is fixed.
 - Email verification links expire after 2 hours by default. Unverified accounts whose verification link has expired are automatically deleted by the backend cleanup job.
 - Forgot-password reset links expire after 2 hours by default. The reset link opens a simple backend-hosted form and clears the reset token after the password is changed.

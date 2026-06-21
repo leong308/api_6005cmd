@@ -56,7 +56,7 @@ function parsePort(rawPort) {
   }
 
   const value = Number(rawPort);
-  if (!Number.isInteger(value) || value <= 0) {
+  if (!Number.isInteger(value) || value <= 0 || value > 65535) {
     return DEFAULT_PORT;
   }
 
@@ -87,4 +87,4 @@ const env = {
   corsOrigin: parseOrigins(process.env.CORS_ORIGIN),
 };
 
-module.exports = { env };
+module.exports = { env, parsePort };
