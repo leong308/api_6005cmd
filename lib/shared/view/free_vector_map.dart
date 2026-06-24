@@ -428,7 +428,8 @@ class _MapboxConfigurationError extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(18),
           child: Text(
-            'Mapbox is not configured. Add MAPBOX_ACCESS_TOKEN to backend/.env.',
+            'Mapbox is not configured. Set MAPBOX_ACCESS_TOKEN in '
+            'web/mapbox_config.json or build with --dart-define.',
             textAlign: TextAlign.center,
             style: Theme.of(
               context,

@@ -343,8 +343,12 @@ Root directory: backend
 Configure MongoDB, JWT, CORS, email delivery, and provider keys in the deployment
 environment. Do not commit `backend/.env`.
 
-`MAPBOX_ACCESS_TOKEN` can also be supplied with `--dart-define`; this takes
-precedence over the value loaded from `backend/.env`.
+Firebase Hosting serves static files, so Render environment variables are not
+available to the Flutter web app. Supply `MAPBOX_ACCESS_TOKEN` with
+`web/mapbox_config.json` for local debug and Firebase builds. The token can
+still be overridden with `--dart-define=MAPBOX_ACCESS_TOKEN=...` when needed.
+Do not bundle `backend/.env` into the Flutter web build; it may contain backend
+secrets.
 
 ## Current Limitations
 
