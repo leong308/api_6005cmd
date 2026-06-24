@@ -345,10 +345,12 @@ environment. Do not commit `backend/.env`.
 
 Firebase Hosting serves static files, so Render environment variables are not
 available to the Flutter web app. Supply `MAPBOX_ACCESS_TOKEN` with
-`web/mapbox_config.json` for local debug and Firebase builds. The token can
-still be overridden with `--dart-define=MAPBOX_ACCESS_TOKEN=...` when needed.
-Do not bundle `backend/.env` into the Flutter web build; it may contain backend
-secrets.
+local ignored `web/mapbox_config.local.json` for local debug and Firebase
+builds. Copy `web/mapbox_config.example.json` to
+`web/mapbox_config.local.json`, then put your Mapbox public token there. The
+token can still be overridden with `--dart-define=MAPBOX_ACCESS_TOKEN=...` when
+needed. Do not bundle `backend/.env` into the Flutter web build; it may contain
+backend secrets.
 
 ## Current Limitations
 

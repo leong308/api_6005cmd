@@ -11,7 +11,7 @@ class MapboxConfig {
   );
   static const String _configPath = String.fromEnvironment(
     'MAPBOX_CONFIG_PATH',
-    defaultValue: 'mapbox_config.json',
+    defaultValue: 'mapbox_config.local.json,mapbox_config.json',
   );
 
   static String _runtimeAccessToken = '';
@@ -33,12 +33,7 @@ class MapboxConfig {
     }
 
     try {
-      final configUri = Uri.base.resolve(_configPath);
-      final contents = readConfig == null
-          ? await _readConfig(configUri)
-          : await readConfig(configUri);
-      _runtimeAccessToken =
-          parseConfigValue(contents, 'MAPBOX_ACCESS_TOKEN') ?? '';
+      _runtimeAccessToken = await _loadRuntimeAccessToken(readConfig);
     } catch (error) {
       _runtimeAccessToken = '';
       debugPrint('Could not load Mapbox frontend config: $error');
@@ -46,10 +41,32 @@ class MapboxConfig {
 
     if (!isConfigured) {
       debugPrint(
-        'MAPBOX_ACCESS_TOKEN is not configured. Set it in web/mapbox_config.json '
-        'or pass it with --dart-define.',
+        'MAPBOX_ACCESS_TOKEN is not configured. Set it in '
+        'web/mapbox_config.local.json or pass it with --dart-define.',
       );
     }
+  }
+
+  static Future<String> _loadRuntimeAccessToken(
+    Future<String> Function(Uri uri)? readConfig,
+  ) async {
+    for (final configPath in _configPath.split(',')) {
+      final trimmedPath = configPath.trim();
+      if (trimmedPath.isEmpty) {
+        continue;
+      }
+
+      final configUri = Uri.base.resolve(trimmedPath);
+      final contents = readConfig == null
+          ? await _readConfig(configUri)
+          : await readConfig(configUri);
+      final accessToken = parseConfigValue(contents, 'MAPBOX_ACCESS_TOKEN');
+      if (accessToken != null && accessToken.isNotEmpty) {
+        return accessToken;
+      }
+    }
+
+    return '';
   }
 
   static Future<String> _readConfig(Uri uri) async {

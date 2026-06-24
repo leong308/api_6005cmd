@@ -51,3 +51,5 @@ backend/.data/
 
 # Local Flutter configuration
 .env
+web/mapbox_config.json
+web/mapbox_config.local.json

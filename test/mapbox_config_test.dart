@@ -18,7 +18,7 @@ void main() {
   test('loads Mapbox access token from frontend config path', () async {
     await MapboxConfig.load(
       readConfig: (uri) async {
-        expect(uri.path, endsWith('/mapbox_config.json'));
+        expect(uri.path, endsWith('/mapbox_config.local.json'));
         return '{"MAPBOX_ACCESS_TOKEN":"pk.runtime-token"}';
       },
     );
