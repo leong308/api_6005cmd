@@ -25,7 +25,7 @@ class MapboxConfig {
     }
 
     try {
-      final contents = await (bundle ?? rootBundle).loadString('.env');
+      final contents = await (bundle ?? rootBundle).loadString('backend/.env');
       _assetAccessToken =
           parseEnvironmentValue(contents, 'MAPBOX_ACCESS_TOKEN') ?? '';
     } catch (error) {

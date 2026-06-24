@@ -344,7 +344,7 @@ Configure MongoDB, JWT, CORS, email delivery, and provider keys in the deploymen
 environment. Do not commit `backend/.env`.
 
 `MAPBOX_ACCESS_TOKEN` can also be supplied with `--dart-define`; this takes
-precedence over the value loaded from `.env`.
+precedence over the value loaded from `backend/.env`.
 
 ## Current Limitations
 
